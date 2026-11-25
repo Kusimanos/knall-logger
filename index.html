@@ -23,6 +23,7 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background
 header.top .wrap{display:flex;align-items:center;gap:12px;padding-block:10px}
 .brand{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.02em;text-transform:uppercase}
 .brand small{display:block;font-family:var(--body);font-weight:400;font-size:12px;letter-spacing:0;text-transform:none;color:var(--muted)}
+#cloudBadge{margin-left:auto}#cloudBadge:not([hidden])+.status{margin-left:0}
 .status{margin-left:auto;font-family:var(--mono);font-size:12px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
 .status.rec{color:var(--bang);border-color:var(--bang)}
 .status.rec::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bang);margin-right:6px;animation:pulse 1.4s infinite}
@@ -98,7 +99,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:14px}
 
 <header class="top"><div class="wrap">
   <div class="brand">Knall-Logger<small>Dachstock · Geräusch-Archiv · <span id="ver"></span></small></div>
-  <div id="status" class="status">bereit</div>
+  <span id="cloudBadge" class="status" hidden></span><div id="status" class="status">bereit</div>
 </div></header>
 
 <main class="wrap">
@@ -263,6 +264,26 @@ details summary{cursor:pointer;color:var(--muted);font-size:14px}
     <div class="row" style="margin-top:10px"><button id="geoBtn" class="btn">Aktuellen Standort verwenden</button><button id="locSave" class="btn primary">Speichern</button></div>
     <p class="small muted" style="margin-top:8px">Die Temperatur kommt stündlich von Open-Meteo (kostenlos, ohne Konto). Es werden nur die Koordinaten übertragen.</p>
   </div>
+  <div class="card" id="cloudCard">
+    <h3>Online-Datenbank</h3>
+    <p class="small" id="cloudStatus"></p>
+    <div id="cloudSetup" class="grid2" style="margin-top:10px">
+      <label class="f">Projekt-URL<input id="cUrl" type="url" placeholder="https://xxxx.supabase.co" autocomplete="off"></label>
+      <label class="f">Öffentlicher Schlüssel (anon / publishable)<input id="cKey" type="text" placeholder="sb_publishable_… oder eyJ…" autocomplete="off"></label>
+    </div>
+    <div id="cloudLogin" class="grid2" style="margin-top:10px" hidden>
+      <label class="f">E-Mail<input id="cMail" type="email" autocomplete="username"></label>
+      <label class="f">Passwort<input id="cPw" type="password" autocomplete="current-password"></label>
+      <div class="row"><button id="cloudIn" class="btn primary">Anmelden</button><button id="cloudUp" class="btn">Konto erstellen</button></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="cloudSave" class="btn primary">Verbinden</button>
+      <button id="cloudSync" class="btn" hidden>Jetzt abgleichen</button>
+      <button id="cloudOut" class="btn" hidden>Abmelden</button>
+      <button id="cloudForget" class="btn sm" hidden>Verbindung entfernen</button>
+    </div>
+    <p class="small muted" style="margin-top:8px">Mit deinem eigenen Supabase-Projekt (Region Europa) werden Knalle, Notizen und Tonausschnitte nach jeder Aufnahme hochgeladen. So siehst du sie auf allen Geräten. Lesen und schreiben kann nur, wer mit deinem Konto angemeldet ist. Ohne Internet speichert die App weiter lokal und lädt später nach. Gib hier nie den geheimen «service_role»-Schlüssel ein.</p>
+  </div>
   <div class="card">
     <h3>Daten</h3>
     <div class="row">
@@ -314,7 +335,7 @@ let toastT;function toast(msg){const el=$("#toast");el.textContent=msg;el.hidden
 const store={get(k,d){try{const v=localStorage.getItem("knall:"+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem("knall:"+k,JSON.stringify(v))}catch(e){}}};
 let framed=true;try{framed=window.top!==window.self}catch(e){framed=true}
 const inArtifact=!!(window.claude&&window.claude.use)&&location.protocol!=="file:"&&framed;
-const APPVER="Version 5 · 25.11.2026";
+const APPVER="Version 6 · 25.11.2026";
 
 /* ================= Speicher (IndexedDB, sonst Arbeitsspeicher) ================= */
 const DB={db:null,mem:null,
@@ -327,11 +348,49 @@ const DB={db:null,mem:null,
   req(s,mode,fn){return new Promise((res,rej)=>{const tx=this.db.transaction(s,mode);const os=tx.objectStore(s);const r=fn(os);tx.oncomplete=()=>res(r&&r.result);tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error)})},
   all(s){if(this.mem)return Promise.resolve([...this.mem[s].values()]);return this.req(s,"readonly",os=>os.getAll())},
   get(s,k){if(this.mem)return Promise.resolve(this.mem[s].get(k));return this.req(s,"readonly",os=>os.get(k))},
-  put(s,v){if(this.mem){this.mem[s].set(this.key(s,v),v);return Promise.resolve()}return this.req(s,"readwrite",os=>os.put(v))},
-  putMany(s,arr){if(this.mem){arr.forEach(v=>this.mem[s].set(this.key(s,v),v));return Promise.resolve()}return this.req(s,"readwrite",os=>{arr.forEach(v=>os.put(v))})},
-  del(s,k){if(this.mem){this.mem[s].delete(k);return Promise.resolve()}return this.req(s,"readwrite",os=>os.delete(k))},
+  put(s,v){track(s,v);if(this.mem){this.mem[s].set(this.key(s,v),v);return Promise.resolve()}return this.req(s,"readwrite",os=>os.put(v))},
+  putMany(s,arr){arr.forEach(v=>track(s,v));if(this.mem){arr.forEach(v=>this.mem[s].set(this.key(s,v),v));return Promise.resolve()}return this.req(s,"readwrite",os=>{arr.forEach(v=>os.put(v))})},
+  del(s,k){track(s,k,true);if(this.mem){this.mem[s].delete(k);return Promise.resolve()}return this.req(s,"readwrite",os=>os.delete(k))},
   clear(s){if(this.mem){this.mem[s].clear();return Promise.resolve()}return this.req(s,"readwrite",os=>os.clear())}
 };
+
+/* ================= Online-Datenbank (Supabase) ================= */
+const SYNCED=["events","notes","sessions","clips"];
+function track(s,v,del){try{if(!SYNCED.includes(s)||Cloud.silent||!Cloud.cfg)return;const id=del?v:v&&v.id;if(!id||String(id).startsWith("demo")||(!del&&v.demo))return;Cloud.enqueue({s,id:String(id),del:!!del,ts:Date.now()})}catch(e){}}
+const Cloud={cfg:store.get("cloud",null),sb:null,user:null,busy:false,silent:0,err:"",lastSync:store.get("lastSync",null),
+  q(){return store.get("syncq",[])},setQ(v){store.set("syncq",v)},
+  async load(){if(this.sb)return this.sb;if(!this.cfg)return null;
+    if(!window.supabase){await new Promise((res,rej)=>{const sc=document.createElement("script");sc.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";sc.onload=res;sc.onerror=()=>rej(new Error("Supabase-Bibliothek nicht ladbar (Internet?)"));document.head.appendChild(sc)})}
+    this.sb=window.supabase.createClient(this.cfg.url,this.cfg.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:"knall-auth"}});
+    const {data}=await this.sb.auth.getSession();this.user=data&&data.session?data.session.user:null;
+    this.sb.auth.onAuthStateChange((_e,sess)=>{const was=this.user;this.user=sess?sess.user:null;cloudUI();if(!was&&this.user)this.sync()});return this.sb},
+  enqueue(op){const q=this.q().filter(x=>!(x.s===op.s&&x.id===op.id));q.push(op);this.setQ(q);cloudUI();this.flushSoon()},
+  flushSoon(){clearTimeout(this._t);this._t=setTimeout(()=>this.flush(),1500)},
+  async flush(){if(this.busy||!this.user)return;this.busy=true;this.err="";try{let q=this.q();while(q.length){const op=q[0];await this.apply(op);q=this.q().filter(x=>!(x.s===op.s&&x.id===op.id&&x.ts===op.ts));this.setQ(q)}this.lastSync=Date.now();store.set("lastSync",this.lastSync)}
+    catch(e){this.err=(e&&e.message)||String(e)}finally{this.busy=false;cloudUI()}},
+  async apply(op){const uid=this.user.id,kindOf={events:"event",notes:"note",sessions:"session"};
+    if(op.s==="clips"){const path=uid+"/"+op.id+".wav";if(op.del){await this.sb.storage.from("clips").remove([path]);return}const c=await DB.get("clips",op.id);if(!c)return;
+      const {error}=await this.sb.storage.from("clips").upload(path,c.blob,{upsert:true,contentType:"audio/wav"});if(error)throw error;return}
+    if(op.del){const {error}=await this.sb.from("items").delete().eq("id",op.id);if(error)throw error;return}
+    const v=await DB.get(op.s,op.id);if(!v)return;const {error}=await this.sb.from("items").upsert({id:op.id,kind:kindOf[op.s],t:Math.round(v.t??v.start??0),data:v,updated_at:new Date().toISOString()});if(error)throw error},
+  async pull(){if(!this.user)return 0;let from=0,n=0;const map={event:"events",note:"notes",session:"sessions"};
+    for(;;){const {data,error}=await this.sb.from("items").select("id,kind,data").order("t").range(from,from+999);if(error)throw error;
+      const by={events:[],notes:[],sessions:[]};data.forEach(r=>{if(map[r.kind])by[map[r.kind]].push(r.data)});this.silent++;try{for(const k in by)if(by[k].length)await DB.putMany(k,by[k])}finally{this.silent--}
+      n+=data.length;if(data.length<1000)break;from+=1000}
+    await loadAll();return n},
+  async sync(){if(!this.user)return;try{await this.flush();const n=await this.pull();this.lastSync=Date.now();store.set("lastSync",this.lastSync);refreshSelectors();rerender();cloudUI();return n}catch(e){this.err=(e&&e.message)||String(e);cloudUI()}},
+  async clip(id){if(!this.user)return null;const {data,error}=await this.sb.storage.from("clips").download(this.user.id+"/"+id+".wav");if(error||!data)return null;this.silent++;try{await DB.put("clips",{id,blob:data,trigOff:1})}finally{this.silent--}return data},
+  pushAll(){const ts=Date.now(),q=[];S.events.filter(e=>!e.demo).forEach(e=>{q.push({s:"events",id:e.id,ts});if(!e.noClip)q.push({s:"clips",id:e.id,ts})});
+    S.notes.filter(n=>!n.demo).forEach(n=>q.push({s:"notes",id:n.id,ts}));S.sessions.filter(x=>!x.demo).forEach(x=>q.push({s:"sessions",id:x.id,ts}));
+    const seen=new Set(this.q().map(x=>x.s+"|"+x.id));this.setQ([...this.q(),...q.filter(x=>!seen.has(x.s+"|"+x.id))])}
+};
+function badKey(k){if(/^sb_secret_/.test(k))return true;try{const p=JSON.parse(atob(k.split(".")[1].replace(/-/g,"+").replace(/_/g,"/")));return p.role==="service_role"}catch(e){return false}}
+function cloudUI(){const st=$("#cloudStatus");if(!st)return;const c=Cloud.cfg,q=Cloud.q().length;
+  $("#cloudSetup").hidden=!!c;$("#cloudLogin").hidden=!c||!!Cloud.user;["#cloudSync","#cloudOut"].forEach(x=>$(x).hidden=!Cloud.user);$("#cloudForget").hidden=!c;$("#cloudSave").hidden=!!c;
+  let t;if(!c)t="Nicht verbunden. Alles bleibt nur auf diesem Gerät.";else if(!Cloud.sb)t="Verbinde …";else if(!Cloud.user)t="Verbunden mit "+c.url.replace(/^https:\/\//,"")+". Bitte anmelden.";
+  else t="Angemeldet als "+Cloud.user.email+". "+(Cloud.busy?"Gleiche ab …":q?q+" Änderungen warten auf Upload.":"Alles hochgeladen.")+(Cloud.lastSync?" Letzter Abgleich "+fmtHM(Cloud.lastSync)+".":"");
+  if(Cloud.err)t+=" Fehler: "+Cloud.err+" (wird später erneut versucht, Daten bleiben lokal gespeichert)";st.textContent=t;
+  const hs=$("#cloudBadge");if(hs){hs.hidden=!Cloud.user;hs.textContent=q?"☁ "+q:"☁ ✓";hs.title=t}}
 
 /* ================= Zustand ================= */
 const DEF={thr:12,onset:8,hpHz:800,minGap:1.0,pre:1.0,post:2.0,sustain:true,susThr:12,maxSus:8};
@@ -629,7 +688,7 @@ function renderAnalysis(){const key=$("#nightSel2").value||"all";const [t0,t1]=s
 /* ================= Archiv-Liste ================= */
 const urls=new Map();let playing=null;
 async function playEvent(e,btn){if(playing){playing.pause();playing=null}
-  let src;if(e.demo){src=URL.createObjectURL(typeOf(e)==="knall"?synthCrack(e):synthSustain(e))}else{const c=await DB.get("clips",e.id);if(!c){toast("Kein Tonausschnitt gespeichert");return}src=URL.createObjectURL(c.blob)}
+  let src;if(e.demo){src=URL.createObjectURL(typeOf(e)==="knall"?synthCrack(e):synthSustain(e))}else{let c=await DB.get("clips",e.id);if(!c&&Cloud.user){toast("Lade Ton aus der Online-Datenbank …");const b=await Cloud.clip(e.id);if(b)c={blob:b}}if(!c){toast("Kein Tonausschnitt gespeichert");return}src=URL.createObjectURL(c.blob)}
   const a=new Audio(src);playing=a;btn.classList.add("on");a.onended=()=>{btn.classList.remove("on");URL.revokeObjectURL(src)};a.play().catch(()=>toast("Wiedergabe nicht möglich"))}
 let evType=store.get("evType","alle");
 function renderTypeFilter(base){const box=$("#typeFilter");box.innerHTML="";const counts={};base.forEach(e=>{const t=typeOf(e);counts[t]=(counts[t]||0)+1});
@@ -730,6 +789,20 @@ function bindSliders(){const map=[["#sThr","#oThr","thr",v=>v+" dB"],["#sOn","#o
 function testCrack(){const AC=window.AudioContext||window.webkitAudioContext;const c=new AC();const e={peakDb:-6,after:[210]};const blob=synthCrack(e);const a=new Audio(URL.createObjectURL(blob));a.play().catch(()=>{});c.close&&c.close()}
 
 async function init(){$("#ver").textContent=APPVER;await DB.open();await loadAll();
+  $("#cloudSave").onclick=async()=>{const url=$("#cUrl").value.trim().replace(/\/+$/,""),key=$("#cKey").value.trim();
+    if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(url)){toast("Projekt-URL bitte im Format https://xxxx.supabase.co");return}
+    if(!key){toast("Bitte den öffentlichen Schlüssel einfügen");return}if(badKey(key)){toast("Das ist der geheime Schlüssel. Bitte den öffentlichen (anon / publishable) nehmen.");return}
+    Cloud.cfg={url,key};store.set("cloud",Cloud.cfg);Cloud.sb=null;cloudUI();try{await Cloud.load()}catch(e){Cloud.err=e.message}cloudUI()};
+  const creds=()=>({email:$("#cMail").value.trim(),password:$("#cPw").value});
+  $("#cloudIn").onclick=async()=>{try{await Cloud.load();const {error}=await Cloud.sb.auth.signInWithPassword(creds());if(error)throw error;$("#cPw").value="";Cloud.pushAll();toast("Angemeldet, gleiche ab …");await Cloud.sync();toast("Abgleich fertig")}catch(e){toast("Anmelden ging nicht: "+(e.message||e))}};
+  $("#cloudUp").onclick=async()=>{try{await Cloud.load();const {data,error}=await Cloud.sb.auth.signUp(Object.assign(creds(),{options:{emailRedirectTo:location.origin+location.pathname}}));if(error)throw error;
+    toast(data.session?"Konto erstellt und angemeldet":"Konto erstellt. Bitte den Link in der Bestätigungs-Mail öffnen, dann hier anmelden.");if(data.session){Cloud.pushAll();await Cloud.sync()}}catch(e){toast("Konto erstellen ging nicht: "+(e.message||e))}};
+  $("#cloudSync").onclick=async()=>{Cloud.pushAll();await Cloud.sync();toast(Cloud.err?"Abgleich mit Fehler":"Abgleich fertig")};
+  $("#cloudOut").onclick=async()=>{try{await Cloud.sb.auth.signOut()}catch(e){}Cloud.user=null;cloudUI();toast("Abgemeldet. Daten auf diesem Gerät bleiben erhalten.")};
+  const fg=$("#cloudForget");fg.onclick=async()=>{if(!fg.dataset.arm){fg.dataset.arm=1;fg.textContent="Wirklich trennen?";setTimeout(()=>{delete fg.dataset.arm;fg.textContent="Verbindung entfernen"},4000);return}
+    try{if(Cloud.sb)await Cloud.sb.auth.signOut()}catch(e){}Cloud.cfg=null;Cloud.sb=null;Cloud.user=null;store.set("cloud",null);store.set("syncq",[]);cloudUI();toast("Verbindung entfernt. Online gespeicherte Daten bleiben in Supabase.")};
+  window.addEventListener("online",()=>Cloud.flushSoon());setInterval(()=>{if(Cloud.user&&Cloud.q().length)Cloud.flush()},60000);
+  cloudUI();if(Cloud.cfg&&!inArtifact)Cloud.load().then(()=>{cloudUI();if(Cloud.user)Cloud.sync()}).catch(e=>{Cloud.err=e.message;cloudUI()});
   document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>show(b.dataset.v));
   $("#recBtn").onclick=()=>R.on?stopRec():startRec();
   $("#nightBtn").onclick=()=>{$("#night").hidden=false};$("#night").onclick=()=>{$("#night").hidden=true;drawMeterLoop()};
