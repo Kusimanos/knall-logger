@@ -9,7 +9,7 @@
 /* Layout: Messgerät für die Nacht. Kopfzeile mit Status, Inhalt in Karten, Navigation unten (Daumen). Bewusst nur dunkel: läuft nachts mit Bildschirm an. */
 :root{
   --bg:#0d1218; --panel:#151d26; --panel2:#1b2530; --line:#2a3644;
-  --fg:#e4e9ef; --muted:#8b99a8; --wood:#e0a35b; --bang:#ff5d4f; --cold:#5cc8e6; --ok:#6fd08c;
+  --fg:#e4e9ef; --muted:#8b99a8; --wood:#e0a35b; --bang:#ff5d4f; --cold:#5cc8e6; --ok:#6fd08c; --snore:#b39cff; --talk:#7fe0a6; --other:#9aa7b4;
   --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
@@ -71,6 +71,12 @@ canvas{display:block;width:100%;max-width:100%}
 .play{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--fg);cursor:pointer;display:grid;place-items:center}
 .play svg{width:16px;height:16px;fill:currentColor}
 .chip{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);font-family:var(--body)}
+.chip.type{font-weight:600}
+.typesel{font:600 12px var(--body);padding:2px 6px;border-radius:99px;background:var(--panel2);max-width:9.5em}
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.filters button{font:500 13px var(--body);padding:6px 11px;border-radius:99px;border:1px solid var(--line);background:var(--panel2);color:var(--muted);cursor:pointer}
+.filters button[aria-pressed="true"]{color:var(--bg);background:var(--fg);border-color:var(--fg)}
+.filters i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
 .chip.demo{color:var(--wood);border-color:var(--wood)}
 .notice{background:#2a2012;border:1px solid #5b4422;color:#f1d3a8;border-radius:8px;padding:10px 12px;font-size:14px}
 .notice.err{background:#2b1514;border-color:#5a2a27;color:#ffc4bd}
@@ -117,6 +123,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:14px}
     <div class="kpi"><b id="kGap" class="mono">–</b><span>Abstand zum vorherigen</span></div>
     <div class="kpi"><b id="kDur" class="mono">0:00</b><span>Laufzeit</span></div>
   </div>
+  <p class="small muted" id="kTypes"></p>
   <div class="row">
     <button id="nightBtn" class="btn" disabled>Bildschirm abdunkeln</button>
     <button id="testBtn" class="btn">Test-Knack abspielen</button>
@@ -155,6 +162,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:14px}
       <h3 style="margin:0" id="evHead">Ereignisse</h3>
       <span class="small muted" id="evSub"></span>
     </div>
+    <div class="filters" id="typeFilter" style="margin-bottom:8px"></div>
     <div id="evList" class="evlist"></div>
   </div>
 </section>
@@ -162,13 +170,13 @@ details summary{cursor:pointer;color:var(--muted);font-size:14px}
 <!-- ============ AUSWERTUNG ============ -->
 <section class="view" id="v-an" hidden>
   <h2>Auswertung</h2>
-  <label class="f">Zeitraum<select id="nightSel2"></select></label>
+  <div class="grid2"><label class="f">Zeitraum<select id="nightSel2"></select></label><label class="f">Geräuschart<select id="anType"><option value="knall">Knall/Knack</option><option value="schnarchen">Schnarchen</option><option value="reden">Reden</option><option value="sonstiges">Sonstiges</option><option value="alle">Alle Geräusche</option></select></label></div>
   <div id="verdict" class="verdict"></div>
   <div class="kpis" id="anKpis"></div>
   <div class="card">
     <h3>Zeitachse</h3>
     <canvas id="cTimeline" aria-label="Knalle über die Nacht mit Aussentemperatur"></canvas>
-    <div class="legend" style="margin-top:6px"><span><i style="background:var(--bang)"></i>Knall (Höhe = Lautstärke)</span><span><i style="background:var(--cold)"></i>Aussentemperatur</span><span><i style="background:var(--wood)"></i>Notiz</span></div>
+    <div class="legend" style="margin-top:6px"><span><i style="background:var(--bang)"></i>Knall</span><span><i style="background:var(--snore)"></i>Schnarchen</span><span><i style="background:var(--talk)"></i>Reden</span><span>Höhe = Lautstärke</span><span><i style="background:var(--cold)"></i>Aussentemperatur</span><span><i style="background:var(--wood)"></i>Notiz</span></div>
   </div>
   <div class="grid2">
     <div class="card">
@@ -239,6 +247,8 @@ details summary{cursor:pointer;color:var(--muted);font-size:14px}
       <label class="f">Anstieg (Schärfe des Knalls): <output id="oOn"></output><input id="sOn" type="range" min="3" max="25" step="1"></label>
       <label class="f">Hochpass (tiefe Brummtöne ausblenden): <output id="oHp"></output><input id="sHp" type="range" min="100" max="3000" step="50"></label>
       <label class="f">Mindestabstand zwischen Knallen: <output id="oGap"></output><input id="sGap" type="range" min="0.3" max="10" step="0.1"></label>
+      <label class="f">Schwelle für längere Geräusche (Schnarchen, Reden): <output id="oSus"></output><input id="sSus" type="range" min="6" max="30" step="1"></label>
+      <label class="f" style="flex-direction:row;align-items:center;gap:8px;color:var(--fg)"><input id="cSus" type="checkbox"> Auch längere Geräusche aufnehmen und einordnen</label>
     </div>
     <p class="small muted" style="margin-top:10px">Tiefere Schwelle findet leisere Knacke, aber auch mehr Fehlalarme (Husten, Autos). Für die Knalle in deiner Aufnahme (Schwerpunkt 2–3 kHz) passt ein Hochpass um 800 Hz gut.</p>
     <div class="row" style="margin-top:10px"><button id="resetSet" class="btn sm">Standardwerte</button></div>
@@ -304,7 +314,7 @@ let toastT;function toast(msg){const el=$("#toast");el.textContent=msg;el.hidden
 const store={get(k,d){try{const v=localStorage.getItem("knall:"+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem("knall:"+k,JSON.stringify(v))}catch(e){}}};
 let framed=true;try{framed=window.top!==window.self}catch(e){framed=true}
 const inArtifact=!!(window.claude&&window.claude.use)&&location.protocol!=="file:"&&framed;
-const APPVER="Version 4 · 25.11.2026";
+const APPVER="Version 5 · 25.11.2026";
 
 /* ================= Speicher (IndexedDB, sonst Arbeitsspeicher) ================= */
 const DB={db:null,mem:null,
@@ -324,8 +334,10 @@ const DB={db:null,mem:null,
 };
 
 /* ================= Zustand ================= */
-const DEF={thr:12,onset:8,hpHz:800,minGap:1.0,pre:1.0,post:2.0};
+const DEF={thr:12,onset:8,hpHz:800,minGap:1.0,pre:1.0,post:2.0,sustain:true,susThr:12,maxSus:8};
 let opt=Object.assign({},DEF,store.get("opt",{}));
+const TYPES={knall:{label:"Knall/Knack",c:"--bang"},schnarchen:{label:"Schnarchen",c:"--snore"},reden:{label:"Reden",c:"--talk"},sonstiges:{label:"Sonstiges",c:"--other"}};
+const typeOf=e=>e.userType||e.type||"knall";
 let loc=store.get("loc",{name:"Zürich (bitte anpassen)",lat:47.3769,lon:8.5417});
 const S={events:[],notes:[],sessions:[],weather:[]};
 async function loadAll(){
@@ -348,11 +360,12 @@ const bandCenter=i=>Math.sqrt(BE[i]*BE[i+1]);
 
 class Detector{
   constructor(sr,o,onEvent){this.sr=sr;this.o=o;this.onEvent=onEvent;this.frame=sr>32000?128:64;
-    this.buf=new Float32Array(Math.ceil((o.pre+o.post+0.5)*sr));this.w=0;this.hp=biquadHP(o.hpHz,sr);
+    this.buf=new Float32Array(Math.ceil((o.pre+o.post+(o.maxSus||8)+2)*sr));this.w=0;this.hp=biquadHP(o.hpHz,sr);this.bb=biquadHP(70,sr);this.bbacc=0;this.floorBB=null;this.sus=null;this.cand=0;this.pendSus=[];
     this.floorDb=null;this.recent=[];this.lastTrig=-1e12;this.pending=[];this.fpos=0;this.facc=0;this.frames=0;this.level=-120;this.hist=[]}
-  push(x){const L=this.buf.length;for(let i=0;i<x.length;i++){const s=x[i];this.buf[this.w%L]=s;this.w++;const y=this.hp.step(s);this.facc+=y*y;if(++this.fpos===this.frame){this.endFrame();while(this.pending.length&&this.w>=this.pending[0].trig+Math.round(this.o.post*this.sr))this.emit(this.pending.shift())}}}
+  push(x){const L=this.buf.length;for(let i=0;i<x.length;i++){const s=x[i];this.buf[this.w%L]=s;this.w++;const y=this.hp.step(s);this.facc+=y*y;const z=this.bb.step(s);this.bbacc+=z*z;if(++this.fpos===this.frame){this.endFrame();while(this.pending.length&&this.w>=this.pending[0].trig+Math.round(this.o.post*this.sr))this.emit(this.pending.shift());while(this.pendSus.length&&this.w>=this.pendSus[0].end+Math.round(.5*this.sr))this.emitSus(this.pendSus.shift())}}}
   recentDb(){if(!this.recent.length)return -120;let s=0;for(const d of this.recent)s+=Math.pow(10,d/10);return 10*Math.log10(s/this.recent.length)}
   endFrame(){const rms=Math.sqrt(this.facc/this.frame),db=20*Math.log10(rms+1e-9);this.facc=0;this.fpos=0;this.frames++;this.level=db;
+    const be=this.bbacc/this.frame;this.bbacc=0;const ka=1-Math.exp(-this.frame/(this.sr*0.04));this.bbE=this.bbE==null?be:this.bbE+ka*(be-this.bbE);this.sustainFrame(10*Math.log10(this.bbE+1e-18));
     const warm=Math.round(.5*this.sr/this.frame);
     if(db<-110){this.recent.push(db);if(this.recent.length>Math.round(.05*this.sr/this.frame))this.recent.shift();if(this.onFrame)this.onFrame(db,this.floorDb??db,false);return}
     if(this.floorDb===null||this.warmN<warm){this.warmN=(this.warmN||0)+1;this.floorDb=this.floorDb===null?db:this.floorDb+(db-this.floorDb)/this.warmN}
@@ -363,10 +376,24 @@ class Detector{
     else if(now-this.lastTrig>2*this.sr)this.floorDb+=a*(above>20?1:0.15)*(db-this.floorDb);
     this.recent.push(db);if(this.recent.length>Math.round(.05*this.sr/this.frame))this.recent.shift();
     if(this.onFrame)this.onFrame(db,this.floorDb,trig)}
-  emit(p){const L=this.buf.length,sr=this.sr;let start=Math.max(0,p.trig-Math.round(this.o.pre*sr),this.w-L+1);const end=Math.min(this.w,p.trig+Math.round(this.o.post*sr));
+  sustainFrame(bdb){if(bdb<-110)return;const fs=this.frame/this.sr,now=this.w,o=this.o;
+    if(this.floorBB===null){this.floorBB=bdb;return}
+    const warm=Math.round(.5*this.sr/this.frame);if((this.warmN||0)<warm){this.floorBB+=(bdb-this.floorBB)/Math.max(1,this.warmN||1);return}
+    const above=bdb-this.floorBB,a=this.frame/(this.sr*10);
+    if(!this.sus){if(above<6)this.floorBB+=a*(bdb-this.floorBB)*(bdb<this.floorBB?4:1);else this.floorBB+=a*0.1*(bdb-this.floorBB)}
+    if(!o.sustain)return;
+    if(!this.sus){if(above>=o.susThr){this.cand++;if(this.cand*fs>=0.25){this.sus={start:now-this.cand*this.frame,last:now,peak:above,quiet:0,floor:this.floorBB};this.cand=0}}else this.cand=0;return}
+    const S=this.sus;if(above>=o.susThr-4){S.quiet=0;S.last=now;S.peak=Math.max(S.peak,above)}else S.quiet++;
+    if(S.quiet*fs>=0.35||now-S.start>=(o.maxSus||8)*this.sr){this.sus=null;const dur=(S.last-S.start)/this.sr;
+      const nearTrig=Math.abs(S.start-this.lastTrig)<0.35*this.sr;(this.doneSus=this.doneSus||[]).push({start:S.start,end:S.last});if(this.doneSus.length>8)this.doneSus.shift();if(dur>=0.3&&!(nearTrig&&dur<0.7))this.pendSus.push({start:S.start,end:S.last,floorDb:S.floor,snr:S.peak,dur})}}
+  emitSus(p){const L=this.buf.length,sr=this.sr;const start=Math.max(0,p.start-Math.round(.5*sr),this.w-L+1),end=Math.min(this.w,p.end+Math.round(.5*sr));if(end<=start)return;
+    const clip=new Float32Array(end-start);for(let i=start;i<end;i++)clip[i-start]=this.buf[i%L];
+    this.onEvent({kind:"sustained",clip,sr,trigOff:p.start-start,trigIndex:p.start,floorDb:p.floorDb,snr:p.snr,dur:p.dur})}
+  overlapsSus(t){const sr=this.sr,near=s=>Math.abs(s.start-t)<0.4*sr||(t>s.start&&t<s.end+0.1*sr);if(this.sus&&near({start:this.sus.start,end:this.w})&&this.w-this.sus.start>0.6*sr)return true;return (this.doneSus||[]).some(s=>near(s)&&s.end-s.start>0.6*sr)}
+  emit(p){if(this.o.sustain&&this.overlapsSus(p.trig))return;const L=this.buf.length,sr=this.sr;let start=Math.max(0,p.trig-Math.round(this.o.pre*sr),this.w-L+1);const end=Math.min(this.w,p.trig+Math.round(this.o.post*sr));
     if(end<=start)return;const clip=new Float32Array(end-start);for(let i=start;i<end;i++)clip[i-start]=this.buf[i%L];
-    this.onEvent({clip,sr,trigOff:p.trig-start,trigIndex:p.trig,floorDb:p.floorDb,snr:p.snr})}
-  flush(){while(this.pending.length)this.emit(this.pending.shift())}
+    this.onEvent({kind:"transient",clip,sr,trigOff:p.trig-start,trigIndex:p.trig,floorDb:p.floorDb,snr:p.snr})}
+  flush(){while(this.pending.length)this.emit(this.pending.shift());if(this.sus){const S=this.sus;this.sus=null;const dur=(S.last-S.start)/this.sr;if(dur>=0.3)this.pendSus.push({start:S.start,end:S.last,floorDb:S.floor,snr:S.peak,dur})}while(this.pendSus.length)this.emitSus(this.pendSus.shift())}
 }
 
 function analyzeClip(clip,sr,trigOff,floorDb,o){
@@ -397,11 +424,33 @@ function encodeWav(clip,sr){let step=sr>32000?2:1,out=clip;if(step===2){out=new 
   for(let i=0;i<n;i++){const s=Math.max(-1,Math.min(1,out[i]));v.setInt16(44+i*2,s<0?s*32768:s*32767,true)}
   return new Blob([b],{type:"audio/wav"})}
 
+function classify(clip,sr,trigOff,kind,dur){
+  // Merkmale über die Dauer des Geräuschs: Frequenzschwerpunkt, Anteil tiefer Töne, Silbenrhythmus
+  const N=1024,hop=512,start=Math.max(0,trigOff-hop),stop=Math.min(clip.length-N,trigOff+Math.round(Math.max(dur||0.15,0.15)*sr));
+  const fr=[];const re=new Float64Array(N),im=new Float64Array(N);
+  for(let s0=start;s0<=stop;s0+=hop){let e=0;for(let i=0;i<N;i++){const v=clip[s0+i]*(0.5-0.5*Math.cos(2*Math.PI*i/(N-1)));re[i]=v;im[i]=0;e+=v*v}
+    fft(re,im);let cw=0,cs=0,lo=0;for(let k=2;k<N/2;k++){const f=k*sr/N,m=re[k]*re[k]+im[k]*im[k];if(f>8000)break;cw+=f*m;cs+=m;if(f<500)lo+=m}
+    fr.push({db:10*Math.log10(e/N+1e-14),e:cs,cen:cs?cw/cs:0,low:cs?lo/cs:0})}
+  const mx=Math.max(...fr.map(f=>f.db)),act=fr.filter(f=>f.db>mx-20&&f.e>0),W=act.reduce((a,f)=>a+f.e,0)||1;
+  const cen=act.reduce((a,f)=>a+f.cen*f.e,0)/W,low=act.reduce((a,f)=>a+f.low*f.e,0)/W;
+  const lc=act.map(f=>Math.log(f.cen+1)),lm=lc.reduce((a,b)=>a+b,0)/(lc.length||1);const cv=lc.length>2?Math.sqrt(lc.reduce((a,b)=>a+(b-lm)**2,0)/lc.length):0;
+  // Silbenrhythmus: Lautstärkeverlauf ohne langsame Hüllkurve, Autokorrelation bei 2.5–8 Hz
+  let mod=0,modHz=null;const env=fr.map(f=>f.db),fps=sr/hop,half=Math.round(fps*0.2);
+  if(env.length>12){const x=env.map((v,i)=>{let s=0,n=0;for(let k=Math.max(0,i-half);k<=Math.min(env.length-1,i+half);k++){s+=env[k];n++}return v-s/n});
+    const v0=x.reduce((a,b)=>a+b*b,0)||1;for(let lag=Math.round(fps/8);lag<=Math.round(fps/2.5)&&lag<x.length-2;lag++){let c=0;for(let i=0;i+lag<x.length;i++)c+=x[i]*x[i+lag];c/=v0;if(c>mod){mod=c;modHz=fps/lag}}}
+  const f={cen:Math.round(cen),low:Math.round(low*100)/100,cv:Math.round(cv*100)/100,mod:Math.round(mod*100)/100,modHz:modHz?Math.round(modHz*10)/10:null,dur:dur?Math.round(dur*100)/100:null};
+  if(kind==="transient")return {type:"knall",conf:cen>900?0.9:0.6,feat:f};
+  const snore=(low>0.5?1.2:low>0.35?0.6:0)+(cen<800?1:cen<1200?0.4:0)+(dur>=0.4&&dur<=4.5?0.6:0)-(mod>0.35?0.4:0);
+  const talk=(mod>0.3?1.2:mod>0.18?0.6:0)+(cen>=500&&cen<=3500?0.8:0)+(cv>0.2?0.6:0)+(dur>=1.5?0.4:0)-(low>0.6?0.8:0);
+  let type="sonstiges";const sc=Math.max(snore,talk);if(sc>=1.8)type=snore>=talk?"schnarchen":"reden";
+  return {type,conf:Math.min(0.95,Math.round(sc/3*100)/100),feat:f}}
+const clipBudget={};
 async function saveEvent(ev,clipObj){
-  const a=analyzeClip(clipObj.clip,clipObj.sr,clipObj.trigOff,clipObj.floorDb,opt);
-  const e=Object.assign({id:uid(),floorDb:Math.round(clipObj.floorDb*10)/10,snr:Math.round(clipObj.snr*10)/10},ev,a);
+  const a=analyzeClip(clipObj.clip,clipObj.sr,clipObj.trigOff,clipObj.floorDb,opt);const cl=classify(clipObj.clip,clipObj.sr,clipObj.trigOff,clipObj.kind||"transient",clipObj.dur);
+  const e=Object.assign({id:uid(),floorDb:Math.round(clipObj.floorDb*10)/10,snr:Math.round(clipObj.snr*10)/10,kind:clipObj.kind||"transient",dur:clipObj.dur?Math.round(clipObj.dur*10)/10:null,type:cl.type,conf:cl.conf,feat:cl.feat},ev,a);
+  const hk=cl.type+"|"+Math.floor(e.t/3600e3);clipBudget[hk]=(clipBudget[hk]||0)+1;const keepClip=cl.type==="knall"||clipBudget[hk]<=30;e.noClip=!keepClip;
   await DB.put("events",e);
-  try{await DB.put("clips",{id:e.id,blob:encodeWav(clipObj.clip,clipObj.sr),trigOff:clipObj.trigOff/clipObj.sr})}catch(err){console.warn(err)}
+  if(keepClip)try{await DB.put("clips",{id:e.id,blob:encodeWav(clipObj.clip,clipObj.sr),trigOff:clipObj.trigOff/clipObj.sr})}catch(err){console.warn(err)}
   S.events.push(e);S.events.sort((x,y)=>x.t-y.t);return e}
 
 /* ================= Live-Aufnahme ================= */
@@ -417,12 +466,12 @@ async function startRec(){
   await DB.put("sessions",session);S.sessions.push(session);
   const det=new Detector(ctx.sampleRate,opt,clipObj=>{
     const t=Date.now()-((det.w-clipObj.trigIndex)/ctx.sampleRate)*1000;
-    R.chain=R.chain.then(()=>saveEvent({t,session:session.id,source:"live"},clipObj)).then(e=>{R.count++;const prev=R.last;R.last=e.t;
+    R.chain=R.chain.then(()=>saveEvent({t,session:session.id,source:"live"},clipObj)).then(e=>{R.types[e.type]=(R.types[e.type]||0)+1;$("#kTypes").textContent=Object.entries(R.types).filter(([k])=>k!=="knall").map(([k,v])=>TYPES[k].label+": "+v).join(" · ");if(e.type!=="knall"){if(currentView==="ev")renderEvents();return}R.count++;const prev=R.last;R.last=e.t;
       $("#kCount").textContent=R.count;$("#kLast").textContent=fmtTime(e.t);$("#kGap").textContent=prev?fmtDur((e.t-prev)/1000):"–";$("#nCount").textContent=R.count;$("#nLast").textContent="zuletzt "+fmtTime(e.t)+(prev?" · Abstand "+fmtDur((e.t-prev)/1000):"");
       if(currentView==="ev")renderEvents()}).catch(err=>console.error(err))});
   det.onFrame=(db,fl,trig)=>{R.meterHist.push([db,fl,trig]);if(R.meterHist.length>9000)R.meterHist.splice(0,R.meterHist.length-9000)};
   node.onaudioprocess=ev=>det.push(ev.inputBuffer.getChannelData(0));
-  Object.assign(R,{on:true,ctx,stream,node,src,det,session,count:0,last:null,startT:Date.now(),meterHist:[]});
+  Object.assign(R,{on:true,ctx,stream,node,src,det,session,count:0,types:{},last:null,startT:Date.now(),meterHist:[]});$("#kTypes").textContent="";
   ["#kCount","#nCount"].forEach(s=>$(s).textContent="0");$("#kLast").textContent="–";$("#kGap").textContent="–";
   await requestWake();
   R.timer=setInterval(()=>{$("#kDur").textContent=fmtClock((Date.now()-R.startT)/1000);if(Date.now()-session.end>60000){session.end=Date.now();DB.put("sessions",session)}},1000);
@@ -477,7 +526,7 @@ async function runImport(){if(!importBuf)return;const start=new Date($("#importS
     $("#importProg").textContent="Analysiere … "+Math.round((p+n)/len*100)+" % · "+found.length+" Knalle";await new Promise(r=>setTimeout(r,0))}
   det.flush();await DB.put("sessions",session);S.sessions.push(session);
   for(const c of found)await saveEvent({t:start+c.trigIndex/sr*1000,session:session.id,source:"import"},c);
-  $("#importGo").disabled=false;$("#importBox").hidden=true;importBuf=null;toast(found.length+" Knalle gefunden");
+  $("#importGo").disabled=false;$("#importBox").hidden=true;importBuf=null;toast(found.length+" Geräusche gefunden");
   refreshSelectors(nightKey(start));renderEvents();autoWeather()}
 
 /* ================= Wetter (Open-Meteo) ================= */
@@ -515,7 +564,7 @@ function drawTimeline(evs,notes,range){const cv=$("#cTimeline");const {ctx,w,h}=
     ctx.save();ctx.beginPath();ctx.rect(L,T,pw,ph);ctx.clip();ctx.strokeStyle=css("--cold");ctx.lineWidth=2;ctx.beginPath();W.forEach((p,i)=>i?ctx.lineTo(x(p.t),yt(p.temp)):ctx.moveTo(x(p.t),yt(p.temp)));ctx.stroke();ctx.restore();
     ctx.fillStyle=css("--cold");ctx.textAlign="left";ctx.font="11px "+css("--mono");const tick=Math.max(1,Math.round((hi-lo)/4));for(let v=lo;v<=hi;v+=tick)ctx.fillText(v+"°",L+pw+5,yt(v)+4)}
   // Knalle
-  ctx.fillStyle=css("--bang");evs.forEach(e=>{ctx.globalAlpha=.85;ctx.beginPath();ctx.arc(x(e.t),yd(e.peakDb),3.2,0,7);ctx.fill()});ctx.globalAlpha=1;
+  evs.forEach(e=>{ctx.fillStyle=css(TYPES[typeOf(e)].c);ctx.globalAlpha=.85;ctx.beginPath();ctx.arc(x(e.t),yd(e.peakDb),3.2,0,7);ctx.fill()});ctx.globalAlpha=1;
   // Sitzungen (Aufnahmezeiten) als Band
   ctx.fillStyle=css("--ok");ctx.globalAlpha=.5;S.sessions.forEach(s=>{const a=Math.max(t0,s.start),b=Math.min(t1,s.end);if(b>a)ctx.fillRect(x(a),T+ph+1,x(b)-x(a),2)});ctx.globalAlpha=1}
 function drawBars(cv,vals,labels,opts={}){const {ctx,w,h}=setupCanvas(cv,opts.h||170);const L=30,T=16,B=24,pw=w-L-6,ph=h-T-B;const mx=Math.max(1,...vals.map(v=>v||0));const bw=pw/vals.length;
@@ -545,14 +594,16 @@ function selRange(key){if(key==="all"){const ts=[...S.events.map(e=>e.t),...S.se
   const ts=[...S.events.filter(e=>nightKey(e.t)===key).map(e=>e.t),...S.sessions.filter(s=>nightKey(s.start)===key).flatMap(s=>[s.start,s.end])];
   if(ts.length){t0=Math.max(t0,Math.min(...ts)-15*60e3);t1=Math.min(t1,Math.max(...ts)+15*60e3)}return [t0,t1]}
 function renderAnalysis(){const key=$("#nightSel2").value||"all";const [t0,t1]=selRange(key);
-  const evs=S.events.filter(e=>key==="all"||nightKey(e.t)===key);const notes=S.notes.filter(n=>n.t>=t0&&n.t<=t1);
-  const per=periodicity(evs);const cov=coverageMs(t0,t1)/3600e3;const rate=cov>0?evs.length/cov:null;
+  const at=$("#anType").value||"knall";const evs=S.events.filter(e=>(key==="all"||nightKey(e.t)===key)&&(at==="alle"||typeOf(e)===at));const notes=S.notes.filter(n=>n.t>=t0&&n.t<=t1);
+  const evK=at==="alle"?evs.filter(e=>typeOf(e)==="knall"):evs;const per=periodicity(evK);const cov=coverageMs(t0,t1)/3600e3;const rate=cov>0?evs.length/cov:null;
   const after=evs.filter(e=>e.after&&e.after.length);const afterGap=median(after.map(e=>e.after[0]));
   const k=$("#anKpis");k.innerHTML="";const add=(v,l)=>{const d=document.createElement("div");d.className="kpi";d.innerHTML="<b class='mono'></b><span></span>";d.children[0].textContent=v;d.children[1].textContent=l;k.appendChild(d)};
-  add(evs.length,"Knalle");add(cov?fmtDur(cov*3600):"–","aufgenommen");add(rate!=null?rate.toFixed(1):"–","Knalle pro Stunde");add(per.med?fmtDur(per.med):"–","typischer Abstand (Median)");
+  add(evs.length,at==="alle"?"Geräusche":TYPES[at].label);add(cov?fmtDur(cov*3600):"–","aufgenommen");add(rate!=null?rate.toFixed(1):"–","pro Stunde");add(per.med?fmtDur(per.med):"–","typischer Abstand (Median)");
   add(evs.length?Math.round(median(evs.map(e=>e.peakDb)))+" dB":"–","Lautstärke (Median, relativ)");add(after.length?Math.round(after.length/evs.length*100)+" %":"–","mit Nachknacken"+(afterGap?" (nach "+(afterGap/1000).toFixed(2)+" s)":""));
   // Urteil
   const v=$("#verdict");v.classList.remove("strong");
+  if(at==="schnarchen"||at==="reden"||at==="sonstiges"){const lbl=TYPES[at].label;v.innerHTML="<b>"+esc(lbl)+": "+evs.length+" Ereignisse.</b> "+(at==="schnarchen"&&per.med?"Typischer Abstand "+esc(fmtDur(per.med))+" (Atemrhythmus). ":"")+"Die Takt-Erkennung für die Heizung bezieht sich nur auf Knalle. Wähle oben «Knall/Knack», um sie zu sehen.";}
+  else
   if(evs.length<5)v.innerHTML="<b>Noch zu wenig Daten.</b> Ab etwa 5 Knallen in einer Nacht lässt sich ein Rhythmus erkennen.";
   else if(per.med&&per.share>=.5&&per.iv.length>=4){v.classList.add("strong");v.innerHTML="<b>Fester Takt erkannt: etwa alle "+esc(fmtDur(per.med))+".</b> "+Math.round(per.share*100)+" % der Abstände liegen nahe an diesem Wert. Ein so gleichmässiger Rhythmus deutet auf etwas Technisches hin, das zyklisch arbeitet, z. B. Takten der Wärmepumpe und Heizungsrohre, die sich dabei ausdehnen. Vergleiche die Uhrzeiten mit dem Verlauf der Novelan."}
   else if(per.med&&per.share>=.3)v.innerHTML="<b>Teilweise regelmässig.</b> "+Math.round(per.share*100)+" % der Abstände liegen nahe "+esc(fmtDur(per.med))+". Möglich ist ein Takt, der zeitweise läuft (z. B. nur in kalten Stunden), dazwischen unregelmässige Knacke.";
@@ -578,25 +629,34 @@ function renderAnalysis(){const key=$("#nightSel2").value||"all";const [t0,t1]=s
 /* ================= Archiv-Liste ================= */
 const urls=new Map();let playing=null;
 async function playEvent(e,btn){if(playing){playing.pause();playing=null}
-  let src;if(e.demo){src=URL.createObjectURL(synthCrack(e))}else{const c=await DB.get("clips",e.id);if(!c){toast("Kein Tonausschnitt gespeichert");return}src=URL.createObjectURL(c.blob)}
+  let src;if(e.demo){src=URL.createObjectURL(typeOf(e)==="knall"?synthCrack(e):synthSustain(e))}else{const c=await DB.get("clips",e.id);if(!c){toast("Kein Tonausschnitt gespeichert");return}src=URL.createObjectURL(c.blob)}
   const a=new Audio(src);playing=a;btn.classList.add("on");a.onended=()=>{btn.classList.remove("on");URL.revokeObjectURL(src)};a.play().catch(()=>toast("Wiedergabe nicht möglich"))}
-function renderEvents(){const key=$("#nightSel").value||"all";const evs=S.events.filter(e=>key==="all"||nightKey(e.t)===key);
-  $("#evHead").textContent=key==="all"?"Alle Ereignisse":nightLabel(key);$("#evSub").textContent=evs.length+" Knalle";
+let evType=store.get("evType","alle");
+function renderTypeFilter(base){const box=$("#typeFilter");box.innerHTML="";const counts={};base.forEach(e=>{const t=typeOf(e);counts[t]=(counts[t]||0)+1});
+  [["alle","Alle",null,base.length],...Object.entries(TYPES).map(([k,v])=>[k,v.label,v.c,counts[k]||0])].forEach(([k,l,c,n])=>{if(k!=="alle"&&!n&&evType!==k)return;const b=document.createElement("button");b.setAttribute("aria-pressed",evType===k);
+    if(c){const i=document.createElement("i");i.style.background="var("+c+")";b.appendChild(i)}b.append(l+" "+n);b.onclick=()=>{evType=k;store.set("evType",k);renderEvents()};box.appendChild(b)})}
+function renderEvents(){const key=$("#nightSel").value||"all";const base=S.events.filter(e=>key==="all"||nightKey(e.t)===key);renderTypeFilter(base);const evs=base.filter(e=>evType==="alle"||typeOf(e)===evType);
+  $("#evHead").textContent=key==="all"?"Alle Ereignisse":nightLabel(key);$("#evSub").textContent=evs.length+" Geräusche";
   const list=$("#evList");list.innerHTML="";
   if(!evs.length){list.innerHTML="<p class='muted small' style='padding:8px 0'>Noch keine Knalle gespeichert. Starte eine Aufnahme, importiere eine Datei aus Sleep Talk Recorder oder lade unter «Mehr» eine Beispielnacht.</p>";return}
-  const show=evs.slice(-300).reverse();show.forEach((e,idx)=>{const i=evs.indexOf(e);const prev=i>0&&evs[i-1].session===e.session?evs[i-1]:null;const w=tempAt(e.t);
+  const show=evs.slice(-300).reverse();show.forEach((e,idx)=>{const i=evs.indexOf(e);let prev=null;for(let j=i-1;j>=0;j--){if(typeOf(evs[j])===typeOf(e)){if(evs[j].session===e.session)prev=evs[j];break}}const w=tempAt(e.t);
     const row=document.createElement("div");row.className="ev";
     row.innerHTML="<button class='play' aria-label='Abspielen'><svg viewBox='0 0 16 16'><path d='M4 2l10 6-10 6z'/></svg></button><div><div class='t'></div><div class='meta'></div></div><button class='btn sm'>Löschen</button><canvas class='spec'></canvas>";
     row.querySelector(".t").textContent=fmtTime(e.t)+(key==="all"?"  "+fmtDate(e.t):"");
-    const parts=[e.peakDb+" dB"];if(prev)parts.push("+"+fmtDur((e.t-prev.t)/1000));if(e.centroid)parts.push((e.centroid/1000).toFixed(1)+" kHz");if(e.after&&e.after.length)parts.push(e.after.length+"× Nachknack");if(w)parts.push(w.temp.toFixed(1)+" °C aussen");
-    const meta=row.querySelector(".meta");meta.textContent=parts.join(" · ");if(e.demo){const c=document.createElement("span");c.className="chip demo";c.textContent="Beispiel";meta.append(" ",c)}else if(e.source==="import"){const c=document.createElement("span");c.className="chip";c.textContent="importiert";meta.append(" ",c)}
+    const parts=[e.peakDb+" dB"];if(e.dur)parts.push(e.dur.toFixed(1)+" s lang");if(prev)parts.push("+"+fmtDur((e.t-prev.t)/1000));if(e.centroid)parts.push((e.centroid/1000).toFixed(1)+" kHz");if(typeOf(e)==="knall"&&e.after&&e.after.length)parts.push(e.after.length+"× Nachknack");if(w)parts.push(w.temp.toFixed(1)+" °C aussen");
+    const meta=row.querySelector(".meta");meta.textContent=parts.join(" · ");
+    const ts=document.createElement("select");ts.className="typesel";ts.setAttribute("aria-label","Geräuschart");Object.entries(TYPES).forEach(([k,v])=>{const o=document.createElement("option");o.value=k;o.textContent=v.label;ts.appendChild(o)});ts.value=typeOf(e);ts.style.color="var("+TYPES[typeOf(e)].c+")";
+    ts.title=e.userType?"von dir festgelegt":"automatisch erkannt"+(e.conf!=null?" (Sicherheit "+Math.round(e.conf*100)+" %)":"");
+    ts.onchange=async()=>{e.userType=ts.value;await DB.put("events",e);toast("Als «"+TYPES[ts.value].label+"» markiert");renderEvents()};
+    const tw=document.createElement("div");tw.style.marginTop="4px";tw.appendChild(ts);if(!e.userType&&e.conf!=null&&e.conf<0.6){const q=document.createElement("span");q.className="small muted";q.textContent=" unsicher";tw.appendChild(q)}if(e.noClip){const q=document.createElement("span");q.className="small muted";q.textContent=" · ohne Ton (Speicher sparen)";tw.appendChild(q)}
+    row.querySelector(".t").parentNode.appendChild(tw);if(e.demo){const c=document.createElement("span");c.className="chip demo";c.textContent="Beispiel";meta.append(" ",c)}else if(e.source==="import"){const c=document.createElement("span");c.className="chip";c.textContent="importiert";meta.append(" ",c)}
     row.querySelector(".play").onclick=ev=>playEvent(e,ev.currentTarget);
     const del=row.querySelector(".btn");del.onclick=async()=>{if(del.dataset.arm){await DB.del("events",e.id);await DB.del("clips",e.id);S.events=S.events.filter(x=>x.id!==e.id);renderEvents()}else{del.dataset.arm=1;del.textContent="Sicher?";del.classList.add("danger");setTimeout(()=>{if(del.isConnected){delete del.dataset.arm;del.textContent="Löschen";del.classList.remove("danger")}},3000)}};
     list.appendChild(row);requestAnimationFrame(()=>drawMiniSpec(row.querySelector(".spec"),e.bands))});
   if(evs.length>300){const p=document.createElement("p");p.className="small muted";p.style.paddingTop="8px";p.textContent="Angezeigt: die letzten 300. Wähle oben eine einzelne Nacht.";list.appendChild(p)}}
 
 function refreshSelectors(prefer){const keys=new Set([...S.events.map(e=>nightKey(e.t)),...S.sessions.map(s=>nightKey(s.start))]);const arr=[...keys].sort().reverse();
-  [$("#nightSel"),$("#nightSel2")].forEach(sel=>{const cur=prefer||sel.value;sel.innerHTML="";arr.forEach(k=>{const o=document.createElement("option");o.value=k;const n=S.events.filter(e=>nightKey(e.t)===k).length;o.textContent=nightLabel(k)+" · "+n+" Knalle";sel.appendChild(o)});
+  [$("#nightSel"),$("#nightSel2")].forEach(sel=>{const cur=prefer||sel.value;sel.innerHTML="";arr.forEach(k=>{const o=document.createElement("option");o.value=k;const n=S.events.filter(e=>nightKey(e.t)===k&&typeOf(e)==="knall").length;o.textContent=nightLabel(k)+" · "+n+" Knalle";sel.appendChild(o)});
     const o=document.createElement("option");o.value="all";o.textContent="Alle Nächte";sel.appendChild(o);sel.value=arr.includes(cur)||cur==="all"?cur:(arr[0]||"all")})}
 
 /* ================= Klima / Notizen ================= */
@@ -612,6 +672,8 @@ async function saveNote(text){const t=new Date($("#nTime").value).getTime();cons
   await DB.put("notes",n);S.notes.push(n);S.notes.sort((a,b)=>a.t-b.t);["#nText","#nRh","#nT","#nTa"].forEach(s=>$(s).value="");$("#nTime").value=toLocalInput(Date.now());renderNotes();toast("Notiz gespeichert · "+fmtHM(n.t))}
 
 /* ================= Beispielnacht ================= */
+function synthSustain(e){const sr=22050,d=e.dur||1.5,n=Math.round(sr*(d+1)),x=new Float32Array(n);let seed=3;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647*2-1};const amp=Math.pow(10,(e.peakDb||-30)/20);let lp=0;
+  for(let i=0;i<n;i++){const t=i/sr-0.5;let g=t>0&&t<d?Math.sin(Math.PI*t/d):0;if(e.type==="reden")g*=0.5+0.5*Math.sin(2*Math.PI*4.5*t);const src=e.type==="schnarchen"?(Math.sin(2*Math.PI*55*t)>0.6?1:0)*rnd():rnd();lp+=(e.type==="schnarchen"?0.08:0.35)*(src-lp);x[i]=amp*g*lp*3}return encodeWav(x,sr)}
 function synthCrack(e){const sr=22050,n=sr*3,x=new Float32Array(n);const amp=Math.pow(10,(e.peakDb||-20)/20);let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647*2-1};
   const hit=(at,a)=>{for(let i=0;i<sr*.06;i++){const k=at+i;if(k<n)x[k]+=a*rnd()*Math.exp(-i/(sr*.006))}};
   for(let i=0;i<n;i++)x[i]=rnd()*0.002;hit(sr,amp);(e.after||[]).forEach(ms=>hit(sr+Math.round(ms/1000*sr),amp*.35));
@@ -626,12 +688,14 @@ async function loadDemo(){const base=new Date();base.setDate(base.getDate()-1);b
   for(let k=0;k<9;k++)evs.push(t0+330*60e3+r()*200*60e3);
   // nach Dusche 22:15 weniger: nichts zwischen 22:15 und 23:05
   for(let k=0;k<4;k++)evs.push(t0+r()*30*60e3);
-  const out=evs.sort((a,b)=>a-b).map(t=>({id:"demo-"+Math.round(t),t:Math.round(t),session:session.id,source:"demo",demo:true,peakDb:Math.round((-34+r()*14)*10)/10,floorDb:-68,snr:30,centroid:Math.round(2300+r()*700),dominant:Math.round(2000+r()*900),bands:bandsFor(),after:r()<.7?[210]:r()<.5?[205,420]:[],decayMs:40}));
+  const out=evs.sort((a,b)=>a-b).map(t=>({type:"knall",kind:"transient",id:"demo-"+Math.round(t),t:Math.round(t),session:session.id,source:"demo",demo:true,peakDb:Math.round((-34+r()*14)*10)/10,floorDb:-68,snr:30,centroid:Math.round(2300+r()*700),dominant:Math.round(2000+r()*900),bands:bandsFor(),after:r()<.7?[210]:r()<.5?[205,420]:[],decayMs:40}));
+  const snoreT=t0+260*60e3;for(let k=0;k<28;k++){const t=snoreT+k*(4200+r()*900);out.push({id:"demo-s"+k,t:Math.round(t),session:session.id,source:"demo",demo:true,kind:"sustained",type:"schnarchen",conf:.8,dur:Math.round((1+r()*.8)*10)/10,peakDb:Math.round((-42+r()*6)*10)/10,floorDb:-68,snr:20,centroid:Math.round(350+r()*200),bands:Array.from({length:BANDS},(_,i)=>{const f=bandCenter(i);return Math.round((-60+22*Math.exp(-Math.pow(Math.log(f/250),2)/0.8))*10)/10}),after:[]})}
+  [t0+20*60e3,t0+22*60e3,t0+400*60e3].forEach((t,k)=>out.push({id:"demo-r"+k,t:Math.round(t),session:session.id,source:"demo",demo:true,kind:"sustained",type:"reden",conf:.7,dur:2.4,peakDb:-30,floorDb:-68,snr:25,centroid:1300,bands:Array.from({length:BANDS},(_,i)=>{const f=bandCenter(i);return Math.round((-62+24*Math.exp(-Math.pow(Math.log(f/900),2)/1.2))*10)/10}),after:[]}));out.sort((a,b)=>a.t-b.t);
   const notes=[{id:"demo-n1",t:t0+35*60e3,text:"Dusche, Tür offen (Beispiel)",rh:48,tin:21.5,demo:true},{id:"demo-n2",t:t0+80*60e3,text:"Gelüftet (Beispiel)",rh:31,tin:20.8,demo:true}];
   const wx=[];for(let h=-2;h<12;h++){const t=Math.floor(t0/3600e3)*3600e3+h*3600e3;wx.push({t,temp:Math.round((1-0.55*h+Math.sin(h)*.4)*10)/10,rh:70+h,demo:true})}
   await DB.put("sessions",session);await DB.putMany("events",out);await DB.putMany("notes",notes);
   const have=new Set(S.weather.map(w=>w.t));await DB.putMany("weather",wx.filter(w=>!have.has(w.t)));
-  await loadAll();refreshSelectors(nightKey(t0+3600e3));rerender();toast("Beispielnacht geladen ("+out.length+" Knalle)")}
+  await loadAll();refreshSelectors(nightKey(t0+3600e3));rerender();toast("Beispielnacht geladen ("+out.length+" Geräusche)")}
 async function removeDemo(){for(const e of S.events.filter(x=>x.demo))await DB.del("events",e.id);for(const n of S.notes.filter(x=>x.demo))await DB.del("notes",n.id);
   for(const w of S.weather.filter(x=>x.demo))await DB.del("weather",w.t);await DB.del("sessions","demo-session");await loadAll();refreshSelectors();rerender();toast("Beispiele entfernt")}
 
@@ -659,7 +723,8 @@ function rerender(){if(currentView==="ev")renderEvents();if(currentView==="an")r
 function wxInfo(){const n=S.weather.length;$("#wxInfo").textContent="Standort: "+loc.name+" ("+(+loc.lat).toFixed(3)+", "+(+loc.lon).toFixed(3)+"). "+(n?n+" Stundenwerte gespeichert, bis "+fmtDate(S.weather[n-1].t)+" "+fmtHM(S.weather[n-1].t)+".":"Noch keine Wetterdaten.")+" Werte werden jedem Knall automatisch zugeordnet."}
 async function setInfo(){let s="";try{if(navigator.storage&&navigator.storage.estimate){const e=await navigator.storage.estimate();s=" Belegt: "+(e.usage/1048576).toFixed(1)+" MB."}}catch(e){}
   $("#storeInfo").textContent=S.events.length+" Knalle, "+S.notes.length+" Notizen, "+S.sessions.length+" Aufnahmen gespeichert."+s+(DB.mem?" Achtung: Dieser Browser erlaubt keinen dauerhaften Speicher, Daten gehen beim Schliessen verloren.":"")}
-function bindSliders(){const map=[["#sThr","#oThr","thr",v=>v+" dB"],["#sOn","#oOn","onset",v=>v+" dB"],["#sHp","#oHp","hpHz",v=>v+" Hz"],["#sGap","#oGap","minGap",v=>(+v).toFixed(1)+" s"]];
+function bindSliders(){const map=[["#sThr","#oThr","thr",v=>v+" dB"],["#sOn","#oOn","onset",v=>v+" dB"],["#sHp","#oHp","hpHz",v=>v+" Hz"],["#sGap","#oGap","minGap",v=>(+v).toFixed(1)+" s"],["#sSus","#oSus","susThr",v=>v+" dB"]];
+  const cs=$("#cSus");cs.checked=opt.sustain!==false;cs.onchange=()=>{opt.sustain=cs.checked;store.set("opt",opt);if(R.det)R.det.o=opt};
   map.forEach(([s,o,k,f])=>{const el=$(s);el.value=opt[k];$(o).textContent=f(opt[k]);el.oninput=()=>{opt[k]=+el.value;$(o).textContent=f(el.value);store.set("opt",opt);if(R.on&&R.det){R.det.o=opt;if(k==="hpHz")R.det.hp=biquadHP(opt.hpHz,R.det.sr)}}})}
 
 function testCrack(){const AC=window.AudioContext||window.webkitAudioContext;const c=new AC();const e={peakDb:-6,after:[210]};const blob=synthCrack(e);const a=new Audio(URL.createObjectURL(blob));a.play().catch(()=>{});c.close&&c.close()}
@@ -671,7 +736,7 @@ async function init(){$("#ver").textContent=APPVER;await DB.open();await loadAll
   $("#testBtn").onclick=testCrack;
   $("#importBtn").onclick=()=>$("#importFile").click();$("#importFile").onchange=e=>{onImportFile(e.target.files[0]);e.target.value=""};
   $("#importGo").onclick=runImport;$("#importCancel").onclick=()=>{importBuf=null;$("#importBox").hidden=true};
-  $("#nightSel").onchange=renderEvents;$("#nightSel2").onchange=renderAnalysis;
+  $("#nightSel").onchange=renderEvents;$("#nightSel2").onchange=renderAnalysis;$("#anType").value=store.get("anType","knall");$("#anType").onchange=()=>{store.set("anType",$("#anType").value);renderAnalysis()};
   const q=$("#quick");QUICK.forEach(t=>{const b=document.createElement("button");b.className="btn sm";b.textContent=t;b.onclick=()=>{$("#nText").value=t;$("#nTime").value=toLocalInput(Date.now())};q.appendChild(b)});
   $("#nTime").value=toLocalInput(Date.now());$("#nSave").onclick=()=>saveNote();
   $("#wxLoad").onclick=()=>loadWeatherAll(false);
