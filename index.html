@@ -1,0 +1,696 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>[hidden]{display:none!important}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style></head><body>
+<title>Dachstock Knall-Logger</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#0d1218">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: Messgerät für die Nacht. Kopfzeile mit Status, Inhalt in Karten, Navigation unten (Daumen). Bewusst nur dunkel: läuft nachts mit Bildschirm an. */
+:root{
+  --bg:#0d1218; --panel:#151d26; --panel2:#1b2530; --line:#2a3644;
+  --fg:#e4e9ef; --muted:#8b99a8; --wood:#e0a35b; --bang:#ff5d4f; --cold:#5cc8e6; --ok:#6fd08c;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:dark;
+}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--body);font-size:15px;line-height:1.45;margin:0;padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:860px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 24px}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+header.top .wrap{display:flex;align-items:center;gap:12px;padding-block:10px}
+.brand{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.02em;text-transform:uppercase}
+.brand small{display:block;font-family:var(--body);font-weight:400;font-size:12px;letter-spacing:0;text-transform:none;color:var(--muted)}
+.status{margin-left:auto;font-family:var(--mono);font-size:12px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.status.rec{color:var(--bang);border-color:var(--bang)}
+.status.rec::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bang);margin-right:6px;animation:pulse 1.4s infinite}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.status.rec::before{animation:none}}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+nav.tabs button{background:none;border:0;color:var(--muted);font:500 12px var(--body);padding:10px 2px 12px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
+nav.tabs button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.7}
+nav.tabs button[aria-selected="true"]{color:var(--wood)}
+nav.tabs button:focus-visible,.btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--wood);outline-offset:2px}
+section.view{display:flex;flex-direction:column;gap:14px}
+h2{font-family:var(--display);font-weight:600;font-size:26px;letter-spacing:.01em;margin:6px 0 0;text-wrap:balance}
+h3{font-family:var(--display);font-weight:600;font-size:19px;letter-spacing:.03em;text-transform:uppercase;margin:0 0 8px;color:var(--wood)}
+p{margin:0}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.btn{appearance:none;border:1px solid var(--line);background:var(--panel2);color:var(--fg);font:500 15px var(--body);padding:10px 14px;border-radius:8px;cursor:pointer;min-height:42px}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--wood);border-color:var(--wood);color:#1a1108;font-weight:600}
+.btn.danger{color:var(--bang);border-color:#5a2a27}
+.btn.big{font-family:var(--display);font-size:24px;letter-spacing:.04em;text-transform:uppercase;padding:16px 22px;width:100%}
+.btn.stop{background:var(--bang);border-color:var(--bang);color:#1d0503}
+.btn.sm{font-size:13px;padding:6px 10px;min-height:32px}
+.btn:disabled{opacity:.45;cursor:default}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0}
+input,select,textarea{font:15px var(--body);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:9px 10px;min-width:0;max-width:100%}
+input[type=range]{padding:0;accent-color:var(--wood)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.kpi{background:var(--panel2);border-radius:8px;padding:10px 12px;min-width:0}
+.kpi b{display:block;font-family:var(--display);font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
+.kpi span{font-size:12px;color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+canvas{display:block;width:100%;max-width:100%}
+.meter{height:90px}
+.verdict{border-left:3px solid var(--wood);padding:10px 12px;background:var(--panel2);border-radius:0 8px 8px 0}
+.verdict.strong{border-color:var(--bang)}
+.evlist{display:flex;flex-direction:column}
+.ev{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.ev:first-child{border-top:0}
+.ev .t{font-family:var(--mono);font-size:16px}
+.ev .meta{font-size:12.5px;color:var(--muted);font-family:var(--mono);min-width:0;overflow-wrap:anywhere}
+.ev .spec{grid-column:2/4;height:22px}
+.play{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--fg);cursor:pointer;display:grid;place-items:center}
+.play svg{width:16px;height:16px;fill:currentColor}
+.chip{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);font-family:var(--body)}
+.chip.demo{color:var(--wood);border-color:var(--wood)}
+.notice{background:#2a2012;border:1px solid #5b4422;color:#f1d3a8;border-radius:8px;padding:10px 12px;font-size:14px}
+.notice.err{background:#2b1514;border-color:#5a2a27;color:#ffc4bd}
+.quick{display:flex;flex-wrap:wrap;gap:8px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--muted);font-weight:500}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto}
+#night{position:fixed;inset:0;z-index:20;background:#000;color:#7a2a24;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-family:var(--mono);text-align:center;padding:20px}
+#night b{font-size:48px;font-weight:500;color:#a8362d}
+#toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 14px;border-radius:8px;font-size:14px;z-index:30;max-width:calc(100% - 32px)}
+details summary{cursor:pointer;color:var(--muted);font-size:14px}
+.sliders{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.sliders output{font-family:var(--mono);color:var(--fg)}
+</style>
+
+<header class="top"><div class="wrap">
+  <div class="brand">Knall-Logger<small>Dachstock · Geräusch-Archiv · <span id="ver"></span></small></div>
+  <div id="status" class="status">bereit</div>
+</div></header>
+
+<main class="wrap">
+
+<!-- ============ AUFNAHME ============ -->
+<section class="view" id="v-rec">
+  <h2>Nachtaufnahme</h2>
+  <div id="envNote" class="notice" hidden></div>
+  <div id="dlBox" class="card" hidden><h3>App für die Nacht holen</h3><p class="small">Hier in Claude ist das Mikrofon immer gesperrt. Lade die App als Datei herunter und öffne sie danach aus dem Ordner «Downloads» mit Chrome.</p><div class="row" style="margin-top:10px"><button id="dlApp" class="btn primary">App herunterladen</button></div><p class="small muted" id="dlInfo" style="margin-top:8px"></p></div>
+  <div class="card">
+    <button id="recBtn" class="btn big primary">Aufnahme starten</button>
+    <p class="small muted" style="margin-top:10px">Das Gerät hört dauerhaft mit, speichert aber nur kurze Ausschnitte rund um jeden Knall (1 s davor, 2 s danach). Alles bleibt auf diesem Gerät.</p>
+  </div>
+  <div class="card">
+    <h3>Pegel live</h3>
+    <canvas id="meter" class="meter" aria-label="Pegelverlauf der letzten 20 Sekunden"></canvas>
+    <div class="legend" style="margin-top:6px"><span><i style="background:var(--muted)"></i>Pegel (Hochpass)</span><span><i style="background:var(--cold)"></i>Grundrauschen</span><span><i style="background:var(--wood)"></i>Auslöseschwelle</span><span><i style="background:var(--bang)"></i>Knall</span></div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><b id="kCount" class="mono">0</b><span>Knalle in dieser Sitzung</span></div>
+    <div class="kpi"><b id="kLast" class="mono">–</b><span>letzter Knall</span></div>
+    <div class="kpi"><b id="kGap" class="mono">–</b><span>Abstand zum vorherigen</span></div>
+    <div class="kpi"><b id="kDur" class="mono">0:00</b><span>Laufzeit</span></div>
+  </div>
+  <div class="row">
+    <button id="nightBtn" class="btn" disabled>Bildschirm abdunkeln</button>
+    <button id="testBtn" class="btn">Test-Knack abspielen</button>
+  </div>
+  <details class="card">
+    <summary>Tipps für die Nacht</summary>
+    <ul class="small" style="margin:10px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px">
+      <li>Gerät ans Ladekabel hängen und im Dachstock oder dort hinlegen, wo du die Knalle am lautesten hörst. Nicht direkt auf Holz legen, ein Tuch darunter dämpft Körperschall.</li>
+      <li>Die App hält den Bildschirm wach. Auf dem iPhone bricht die Aufnahme ab, wenn du die App wechselst oder sperrst. Mit «Bildschirm abdunkeln» wird alles schwarz, die Aufnahme läuft weiter.</li>
+      <li>Vor dem Start einmal laut klopfen: der Knall sollte in der Liste erscheinen. Sonst unter «Einstellungen» die Schwelle senken.</li>
+      <li>Notiere unter «Klima», wann du duschst, lüftest oder die Heizung umstellst. So sieht man später, ob sich der Takt ändert.</li>
+    </ul>
+  </details>
+</section>
+
+<!-- ============ EREIGNISSE ============ -->
+<section class="view" id="v-ev" hidden>
+  <h2>Archiv</h2>
+  <div class="row">
+    <label class="f" style="flex:1 1 220px">Nacht<select id="nightSel"></select></label>
+    <button id="importBtn" class="btn">Aufnahme importieren</button>
+    <input id="importFile" type="file" accept="audio/*,.mp3,.m4a,.wav,.aac" hidden>
+  </div>
+  <div id="importBox" class="card" hidden>
+    <h3>Datei auswerten</h3>
+    <p class="small muted" id="importInfo"></p>
+    <div class="row" style="margin-top:10px">
+      <label class="f" style="flex:1 1 220px">Startzeit der Aufnahme<input id="importStart" type="datetime-local" step="1"></label>
+      <button id="importGo" class="btn primary">Knalle suchen</button>
+      <button id="importCancel" class="btn">Abbrechen</button>
+    </div>
+    <p class="small muted" id="importProg" style="margin-top:8px"></p>
+  </div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:6px">
+      <h3 style="margin:0" id="evHead">Ereignisse</h3>
+      <span class="small muted" id="evSub"></span>
+    </div>
+    <div id="evList" class="evlist"></div>
+  </div>
+</section>
+
+<!-- ============ AUSWERTUNG ============ -->
+<section class="view" id="v-an" hidden>
+  <h2>Auswertung</h2>
+  <label class="f">Zeitraum<select id="nightSel2"></select></label>
+  <div id="verdict" class="verdict"></div>
+  <div class="kpis" id="anKpis"></div>
+  <div class="card">
+    <h3>Zeitachse</h3>
+    <canvas id="cTimeline" aria-label="Knalle über die Nacht mit Aussentemperatur"></canvas>
+    <div class="legend" style="margin-top:6px"><span><i style="background:var(--bang)"></i>Knall (Höhe = Lautstärke)</span><span><i style="background:var(--cold)"></i>Aussentemperatur</span><span><i style="background:var(--wood)"></i>Notiz</span></div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h3>Abstände</h3>
+      <canvas id="cIntervals" aria-label="Verteilung der Abstände zwischen Knallen"></canvas>
+      <p class="small muted" style="margin-top:6px">Zeit zwischen zwei aufeinanderfolgenden Knallen. Ein schmaler, hoher Balken heisst: fester Takt.</p>
+    </div>
+    <div class="card">
+      <h3>Klangbild</h3>
+      <canvas id="cSpectrum" aria-label="Durchschnittliches Frequenzspektrum der Knalle"></canvas>
+      <p class="small muted" style="margin-top:6px" id="specText"></p>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h3>Uhrzeit</h3>
+      <canvas id="cHours" aria-label="Knalle nach Uhrzeit"></canvas>
+    </div>
+    <div class="card">
+      <h3>Knalle pro Stunde nach Aussentemperatur</h3>
+      <canvas id="cTemp" aria-label="Knallrate nach Aussentemperatur"></canvas>
+      <p class="small muted" style="margin-top:6px">Nur Stunden, in denen aufgenommen wurde. Zahl über dem Balken = Aufnahmestunden.</p>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Raumklima und Knalle</h3>
+    <p class="small muted" style="margin-bottom:8px">Jede Klima-Notiz mit der Anzahl Knalle in der Stunde davor und danach.</p>
+    <div class="scroll"><table id="noteTable"></table></div>
+  </div>
+</section>
+
+<!-- ============ KLIMA ============ -->
+<section class="view" id="v-cl" hidden>
+  <h2>Klima &amp; Notizen</h2>
+  <div class="card">
+    <h3>Notiz erfassen</h3>
+    <div class="quick" id="quick"></div>
+    <div class="grid2" style="margin-top:12px">
+      <label class="f">Zeitpunkt<input id="nTime" type="datetime-local"></label>
+      <label class="f">Notiz<input id="nText" type="text" placeholder="z. B. Dusche, Tür offen"></label>
+      <label class="f">Raumfeuchte innen (%)<input id="nRh" type="number" inputmode="decimal" min="0" max="100" step="1" placeholder="z. B. 32"></label>
+      <label class="f">Raumtemperatur innen (°C)<input id="nT" type="number" inputmode="decimal" step="0.1" placeholder="z. B. 21.5"></label>
+      <label class="f">Dachstock-Temperatur (°C)<input id="nTa" type="number" inputmode="decimal" step="0.1" placeholder="optional"></label>
+    </div>
+    <div class="row" style="margin-top:12px"><button id="nSave" class="btn primary">Notiz speichern</button></div>
+  </div>
+  <div class="card">
+    <h3>Aussentemperatur</h3>
+    <p class="small muted" id="wxInfo"></p>
+    <div class="row" style="margin-top:10px">
+      <button id="wxLoad" class="btn">Wetterdaten laden</button>
+      <span class="small muted" id="wxStatus"></span>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Notizen</h3>
+    <div class="scroll"><table id="notesAll"></table></div>
+  </div>
+</section>
+
+<!-- ============ EINSTELLUNGEN ============ -->
+<section class="view" id="v-set" hidden>
+  <h2>Einstellungen</h2>
+  <div class="card">
+    <h3>Erkennung</h3>
+    <div class="sliders">
+      <label class="f">Auslöseschwelle über Grundrauschen: <output id="oThr"></output><input id="sThr" type="range" min="6" max="40" step="1"></label>
+      <label class="f">Anstieg (Schärfe des Knalls): <output id="oOn"></output><input id="sOn" type="range" min="3" max="25" step="1"></label>
+      <label class="f">Hochpass (tiefe Brummtöne ausblenden): <output id="oHp"></output><input id="sHp" type="range" min="100" max="3000" step="50"></label>
+      <label class="f">Mindestabstand zwischen Knallen: <output id="oGap"></output><input id="sGap" type="range" min="0.3" max="10" step="0.1"></label>
+    </div>
+    <p class="small muted" style="margin-top:10px">Tiefere Schwelle findet leisere Knacke, aber auch mehr Fehlalarme (Husten, Autos). Für die Knalle in deiner Aufnahme (Schwerpunkt 2–3 kHz) passt ein Hochpass um 800 Hz gut.</p>
+    <div class="row" style="margin-top:10px"><button id="resetSet" class="btn sm">Standardwerte</button></div>
+  </div>
+  <div class="card">
+    <h3>Standort für das Wetter</h3>
+    <div class="grid2">
+      <label class="f">Ort (nur Anzeige)<input id="lName" type="text"></label>
+      <label class="f">Breitengrad<input id="lLat" type="number" step="0.0001" inputmode="decimal"></label>
+      <label class="f">Längengrad<input id="lLon" type="number" step="0.0001" inputmode="decimal"></label>
+    </div>
+    <div class="row" style="margin-top:10px"><button id="geoBtn" class="btn">Aktuellen Standort verwenden</button><button id="locSave" class="btn primary">Speichern</button></div>
+    <p class="small muted" style="margin-top:8px">Die Temperatur kommt stündlich von Open-Meteo (kostenlos, ohne Konto). Es werden nur die Koordinaten übertragen.</p>
+  </div>
+  <div class="card">
+    <h3>Daten</h3>
+    <div class="row">
+      <button id="expCsv" class="btn">Ereignisse als CSV</button>
+      <button id="expJson" class="btn">Sicherung exportieren</button>
+      <button id="impJson" class="btn">Sicherung importieren</button>
+      <input id="impJsonFile" type="file" accept=".json,application/json" hidden>
+    </div>
+    <p class="small muted" style="margin-top:8px">Die Sicherung enthält alle Knalle samt Tonausschnitten, Notizen und Wetter. Damit kannst du z. B. auf dem Handy aufnehmen und am Laptop auswerten.</p>
+    <div class="row" style="margin-top:12px">
+      <button id="demoBtn" class="btn">Beispielnacht laden</button>
+      <button id="demoDel" class="btn">Beispiele entfernen</button>
+      <button id="wipe" class="btn danger">Alles löschen</button>
+    </div>
+    <p class="small muted" id="storeInfo" style="margin-top:8px"></p>
+  </div>
+</section>
+</main>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" data-v="rec" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Aufnahme</button>
+  <button role="tab" data-v="ev"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Archiv</button>
+  <button role="tab" data-v="an"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/></svg>Auswertung</button>
+  <button role="tab" data-v="cl"><svg viewBox="0 0 24 24"><path d="M10 14.5V5a2 2 0 1 1 4 0v9.5a4 4 0 1 1-4 0z"/></svg>Klima</button>
+  <button role="tab" data-v="set"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>Mehr</button>
+</nav>
+
+<div id="night" hidden><b id="nCount">0</b><div>Knalle · Aufnahme läuft</div><div id="nLast"></div><div style="margin-top:20px;font-size:12px">Antippen zum Aufwecken</div></div>
+<div id="toast" hidden></div>
+
+<script>
+"use strict";
+/* ================= Hilfsfunktionen ================= */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad=n=>String(n).padStart(2,"0");
+const fmtTime=t=>{const d=new Date(t);return pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds())};
+const fmtHM=t=>{const d=new Date(t);return pad(d.getHours())+":"+pad(d.getMinutes())};
+const fmtDate=t=>{const d=new Date(t);return d.getDate()+"."+(d.getMonth()+1)+"."};
+const fmtDur=s=>{s=Math.round(s);if(s<60)return s+" s";const m=Math.floor(s/60),r=s%60;if(m<60)return m+":"+pad(r)+" min";return Math.floor(m/60)+" h "+pad(m%60)+" min"};
+const fmtClock=s=>{s=Math.floor(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h+":"+pad(m)+":"+pad(s%60)};
+const nightKey=t=>{const d=new Date(t-12*3600e3);return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())};
+const nightLabel=k=>{const [y,m,d]=k.split("-").map(Number);const a=new Date(y,m-1,d),b=new Date(y,m-1,d+1);return "Nacht "+a.getDate()+"./"+b.getDate()+"."+(b.getMonth()+1)+"."+b.getFullYear()};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const toLocalInput=t=>{const d=new Date(t);return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds())};
+const num=v=>{if(v===""||v==null)return null;const n=parseFloat(String(v).replace(",","."));return isFinite(n)?n:null};
+const median=a=>{if(!a.length)return null;const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2};
+let toastT;function toast(msg){const el=$("#toast");el.textContent=msg;el.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>el.hidden=true,3200)}
+const store={get(k,d){try{const v=localStorage.getItem("knall:"+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem("knall:"+k,JSON.stringify(v))}catch(e){}}};
+let framed=true;try{framed=window.top!==window.self}catch(e){framed=true}
+const inArtifact=!!(window.claude&&window.claude.use)&&location.protocol!=="file:"&&framed;
+const APPVER="Version 4 · 25.11.2026";
+
+/* ================= Speicher (IndexedDB, sonst Arbeitsspeicher) ================= */
+const DB={db:null,mem:null,
+  open(){return new Promise(res=>{try{const r=indexedDB.open("knall-logger",1);
+    r.onupgradeneeded=()=>{const d=r.result;["events","notes","sessions","clips"].forEach(s=>d.createObjectStore(s,{keyPath:"id"}));d.createObjectStore("weather",{keyPath:"t"})};
+    r.onsuccess=()=>{this.db=r.result;res(true)};r.onerror=()=>{this.useMem();res(false)};r.onblocked=()=>{this.useMem();res(false)};
+  }catch(e){this.useMem();res(false)}})},
+  useMem(){this.mem={events:new Map,notes:new Map,sessions:new Map,clips:new Map,weather:new Map}},
+  key(s,v){return s==="weather"?v.t:v.id},
+  req(s,mode,fn){return new Promise((res,rej)=>{const tx=this.db.transaction(s,mode);const os=tx.objectStore(s);const r=fn(os);tx.oncomplete=()=>res(r&&r.result);tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error)})},
+  all(s){if(this.mem)return Promise.resolve([...this.mem[s].values()]);return this.req(s,"readonly",os=>os.getAll())},
+  get(s,k){if(this.mem)return Promise.resolve(this.mem[s].get(k));return this.req(s,"readonly",os=>os.get(k))},
+  put(s,v){if(this.mem){this.mem[s].set(this.key(s,v),v);return Promise.resolve()}return this.req(s,"readwrite",os=>os.put(v))},
+  putMany(s,arr){if(this.mem){arr.forEach(v=>this.mem[s].set(this.key(s,v),v));return Promise.resolve()}return this.req(s,"readwrite",os=>{arr.forEach(v=>os.put(v))})},
+  del(s,k){if(this.mem){this.mem[s].delete(k);return Promise.resolve()}return this.req(s,"readwrite",os=>os.delete(k))},
+  clear(s){if(this.mem){this.mem[s].clear();return Promise.resolve()}return this.req(s,"readwrite",os=>os.clear())}
+};
+
+/* ================= Zustand ================= */
+const DEF={thr:12,onset:8,hpHz:800,minGap:1.0,pre:1.0,post:2.0};
+let opt=Object.assign({},DEF,store.get("opt",{}));
+let loc=store.get("loc",{name:"Zürich (bitte anpassen)",lat:47.3769,lon:8.5417});
+const S={events:[],notes:[],sessions:[],weather:[]};
+async function loadAll(){
+  S.events=(await DB.all("events")).sort((a,b)=>a.t-b.t);
+  S.notes=(await DB.all("notes")).sort((a,b)=>a.t-b.t);
+  S.sessions=(await DB.all("sessions")).sort((a,b)=>a.start-b.start);
+  S.weather=(await DB.all("weather")).sort((a,b)=>a.t-b.t);
+}
+
+/* ================= Signalverarbeitung ================= */
+function biquadHP(f,sr){const w=2*Math.PI*f/sr,c=Math.cos(w),al=Math.sin(w)/(2*Math.SQRT1_2);const a0=1+al;
+  const b0=(1+c)/2/a0,b1=-(1+c)/a0,b2=(1+c)/2/a0,a1=-2*c/a0,a2=(1-al)/a0;let x1=0,x2=0,y1=0,y2=0;
+  return {step(x){const y=b0*x+b1*x1+b2*x2-a1*y1-a2*y2;x2=x1;x1=x;y2=y1;y1=y;return y}}}
+function fft(re,im){const n=re.length;for(let i=1,j=0;i<n;i++){let b=n>>1;for(;j&b;b>>=1)j^=b;j^=b;if(i<j){[re[i],re[j]]=[re[j],re[i]];[im[i],im[j]]=[im[j],im[i]]}}
+  for(let len=2;len<=n;len<<=1){const a=-2*Math.PI/len,wr=Math.cos(a),wi=Math.sin(a);for(let i=0;i<n;i+=len){let cr=1,ci=0;for(let k=0;k<len/2;k++){const p=i+k,q=p+len/2;const tr=re[q]*cr-im[q]*ci,ti=re[q]*ci+im[q]*cr;re[q]=re[p]-tr;im[q]=im[p]-ti;re[p]+=tr;im[p]+=ti;const t=cr*wr-ci*wi;ci=cr*wi+ci*wr;cr=t}}}}
+const BANDS=24,BLO=100,BHI=12000;
+const bandEdges=()=>{const e=[];for(let i=0;i<=BANDS;i++)e.push(BLO*Math.pow(BHI/BLO,i/BANDS));return e};
+const BE=bandEdges();
+const bandCenter=i=>Math.sqrt(BE[i]*BE[i+1]);
+
+class Detector{
+  constructor(sr,o,onEvent){this.sr=sr;this.o=o;this.onEvent=onEvent;this.frame=sr>32000?128:64;
+    this.buf=new Float32Array(Math.ceil((o.pre+o.post+0.5)*sr));this.w=0;this.hp=biquadHP(o.hpHz,sr);
+    this.floorDb=null;this.recent=[];this.lastTrig=-1e12;this.pending=[];this.fpos=0;this.facc=0;this.frames=0;this.level=-120;this.hist=[]}
+  push(x){const L=this.buf.length;for(let i=0;i<x.length;i++){const s=x[i];this.buf[this.w%L]=s;this.w++;const y=this.hp.step(s);this.facc+=y*y;if(++this.fpos===this.frame){this.endFrame();while(this.pending.length&&this.w>=this.pending[0].trig+Math.round(this.o.post*this.sr))this.emit(this.pending.shift())}}}
+  recentDb(){if(!this.recent.length)return -120;let s=0;for(const d of this.recent)s+=Math.pow(10,d/10);return 10*Math.log10(s/this.recent.length)}
+  endFrame(){const rms=Math.sqrt(this.facc/this.frame),db=20*Math.log10(rms+1e-9);this.facc=0;this.fpos=0;this.frames++;this.level=db;
+    const warm=Math.round(.5*this.sr/this.frame);
+    if(db<-110){this.recent.push(db);if(this.recent.length>Math.round(.05*this.sr/this.frame))this.recent.shift();if(this.onFrame)this.onFrame(db,this.floorDb??db,false);return}
+    if(this.floorDb===null||this.warmN<warm){this.warmN=(this.warmN||0)+1;this.floorDb=this.floorDb===null?db:this.floorDb+(db-this.floorDb)/this.warmN}
+    const ref=this.recentDb(),above=db-this.floorDb,onset=db-ref,now=this.w;let trig=false;
+    if(this.warmN>=warm&&above>=this.o.thr&&onset>=this.o.onset&&now-this.lastTrig>this.o.minGap*this.sr){this.lastTrig=now;trig=true;this.pending.push({trig:now-this.frame,floorDb:this.floorDb,snr:above})}
+    const a=this.frame/(this.sr*8);
+    if(above<6)this.floorDb+=a*(db-this.floorDb)*(db<this.floorDb?4:1);
+    else if(now-this.lastTrig>2*this.sr)this.floorDb+=a*(above>20?1:0.15)*(db-this.floorDb);
+    this.recent.push(db);if(this.recent.length>Math.round(.05*this.sr/this.frame))this.recent.shift();
+    if(this.onFrame)this.onFrame(db,this.floorDb,trig)}
+  emit(p){const L=this.buf.length,sr=this.sr;let start=Math.max(0,p.trig-Math.round(this.o.pre*sr),this.w-L+1);const end=Math.min(this.w,p.trig+Math.round(this.o.post*sr));
+    if(end<=start)return;const clip=new Float32Array(end-start);for(let i=start;i<end;i++)clip[i-start]=this.buf[i%L];
+    this.onEvent({clip,sr,trigOff:p.trig-start,trigIndex:p.trig,floorDb:p.floorDb,snr:p.snr})}
+  flush(){while(this.pending.length)this.emit(this.pending.shift())}
+}
+
+function analyzeClip(clip,sr,trigOff,floorDb,o){
+  // Spitzenpegel
+  let pk=0;const pEnd=Math.min(clip.length,trigOff+Math.round(.1*sr));for(let i=Math.max(0,trigOff-256);i<pEnd;i++)pk=Math.max(pk,Math.abs(clip[i]));
+  const peakDb=20*Math.log10(pk+1e-9);
+  // Spektrum
+  const N=2048,re=new Float64Array(N),im=new Float64Array(N),s0=Math.max(0,trigOff-128);
+  for(let i=0;i<N;i++){const v=clip[s0+i]||0;re[i]=v*(0.5-0.5*Math.cos(2*Math.PI*i/(N-1)))}
+  fft(re,im);const mags=new Float64Array(N/2);for(let k=0;k<N/2;k++)mags[k]=re[k]*re[k]+im[k]*im[k];
+  const bands=new Array(BANDS).fill(0),cnt=new Array(BANDS).fill(0);let cw=0,cs=0,dom=0,domK=0;
+  for(let k=1;k<N/2;k++){const f=k*sr/N;if(f>=100){cw+=f*mags[k];cs+=mags[k];if(mags[k]>dom){dom=mags[k];domK=k}}
+    for(let b=0;b<BANDS;b++)if(f>=BE[b]&&f<BE[b+1]){bands[b]+=mags[k];cnt[b]++;break}}
+  const bandDb=bands.map((v,i)=>cnt[i]?Math.round(10*Math.log10(v/cnt[i]+1e-14)*10)/10:null);
+  // Nachknacke & Ausklingen (Hüllkurve auf Hochpass)
+  const hp=biquadHP(o.hpHz,sr),fr=Math.round(sr*.005),env=[];let acc=0,c=0;
+  for(let i=0;i<clip.length;i++){const y=hp.step(clip[i]);acc+=y*y;if(++c===fr){env.push(10*Math.log10(acc/fr+1e-18));acc=0;c=0}}
+  const tf=Math.floor(trigOff/fr),after=[];let decay=null;
+  for(let j=tf+1;j<env.length;j++){if(decay===null&&env[j]<floorDb+6)decay=(j-tf)*5}
+  for(let j=tf+8;j<Math.min(env.length-1,tf+300);j++){const prev=Math.max(env[j-3],env[j-4],env[j-5]);
+    if(env[j]>floorDb+Math.max(6,o.thr-6)&&env[j]>=env[j-1]&&env[j]>=env[j+1]&&env[j]-prev>=6){const ms=(j-tf)*5;if(!after.length||ms-after[after.length-1]>60)after.push(ms)}}
+  return {peakDb:Math.round(peakDb*10)/10,centroid:cs?Math.round(cw/cs):null,dominant:Math.round(domK*sr/N),bands:bandDb,after,decayMs:decay}
+}
+
+function encodeWav(clip,sr){let step=sr>32000?2:1,out=clip;if(step===2){out=new Float32Array(clip.length>>1);for(let i=0;i<out.length;i++)out[i]=(clip[2*i]+clip[2*i+1])/2}
+  const rate=Math.round(sr/step),n=out.length,b=new ArrayBuffer(44+n*2),v=new DataView(b);const ws=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+  ws(0,"RIFF");v.setUint32(4,36+n*2,true);ws(8,"WAVE");ws(12,"fmt ");v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);ws(36,"data");v.setUint32(40,n*2,true);
+  for(let i=0;i<n;i++){const s=Math.max(-1,Math.min(1,out[i]));v.setInt16(44+i*2,s<0?s*32768:s*32767,true)}
+  return new Blob([b],{type:"audio/wav"})}
+
+async function saveEvent(ev,clipObj){
+  const a=analyzeClip(clipObj.clip,clipObj.sr,clipObj.trigOff,clipObj.floorDb,opt);
+  const e=Object.assign({id:uid(),floorDb:Math.round(clipObj.floorDb*10)/10,snr:Math.round(clipObj.snr*10)/10},ev,a);
+  await DB.put("events",e);
+  try{await DB.put("clips",{id:e.id,blob:encodeWav(clipObj.clip,clipObj.sr),trigOff:clipObj.trigOff/clipObj.sr})}catch(err){console.warn(err)}
+  S.events.push(e);S.events.sort((x,y)=>x.t-y.t);return e}
+
+/* ================= Live-Aufnahme ================= */
+const R={on:false,ctx:null,stream:null,node:null,src:null,det:null,session:null,count:0,last:null,startT:0,wake:null,hiddenAt:null,meterHist:[],timer:null,chain:Promise.resolve()};
+async function startRec(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){showEnv("["+location.protocol+" · "+APPVER+"] "+"Dieser Browser gibt das Mikrofon hier nicht frei. "+(inArtifact?"In der Vorschau auf claude.ai ist das Mikrofon gesperrt. Öffne die eigenständige Datei knall-logger.html im Browser (Safari, Chrome).":"Öffne die Seite über https oder als lokale Datei in Chrome."),true);return}
+  let stream;try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:1}})}
+  catch(e){console.warn(e);micFail(e);return;showEnv(inArtifact?"Das Mikrofon ist in der Vorschau auf claude.ai gesperrt. Für Nachtaufnahmen die eigenständige Datei knall-logger.html im Browser öffnen. Hier kannst du Aufnahmen importieren und auswerten.":"Kein Zugriff aufs Mikrofon ("+e.name+"). Klicke links neben der Adresszeile auf das Schloss- oder Seiten-Symbol und erlaube das Mikrofon. Unter Windows zusätzlich prüfen: Einstellungen › Datenschutz › Mikrofon › Desktop-Apps dürfen zugreifen.",true);return}
+  const AC=window.AudioContext||window.webkitAudioContext;const ctx=new AC();await ctx.resume();
+  const src=ctx.createMediaStreamSource(stream),node=ctx.createScriptProcessor(4096,1,1),mute=ctx.createGain();mute.gain.value=0;
+  src.connect(node);node.connect(mute);mute.connect(ctx.destination);
+  const session={id:uid(),start:Date.now(),end:Date.now(),gaps:[],source:"live",device:navigator.userAgent.slice(0,120),opt:Object.assign({},opt),sr:ctx.sampleRate};
+  await DB.put("sessions",session);S.sessions.push(session);
+  const det=new Detector(ctx.sampleRate,opt,clipObj=>{
+    const t=Date.now()-((det.w-clipObj.trigIndex)/ctx.sampleRate)*1000;
+    R.chain=R.chain.then(()=>saveEvent({t,session:session.id,source:"live"},clipObj)).then(e=>{R.count++;const prev=R.last;R.last=e.t;
+      $("#kCount").textContent=R.count;$("#kLast").textContent=fmtTime(e.t);$("#kGap").textContent=prev?fmtDur((e.t-prev)/1000):"–";$("#nCount").textContent=R.count;$("#nLast").textContent="zuletzt "+fmtTime(e.t)+(prev?" · Abstand "+fmtDur((e.t-prev)/1000):"");
+      if(currentView==="ev")renderEvents()}).catch(err=>console.error(err))});
+  det.onFrame=(db,fl,trig)=>{R.meterHist.push([db,fl,trig]);if(R.meterHist.length>9000)R.meterHist.splice(0,R.meterHist.length-9000)};
+  node.onaudioprocess=ev=>det.push(ev.inputBuffer.getChannelData(0));
+  Object.assign(R,{on:true,ctx,stream,node,src,det,session,count:0,last:null,startT:Date.now(),meterHist:[]});
+  ["#kCount","#nCount"].forEach(s=>$(s).textContent="0");$("#kLast").textContent="–";$("#kGap").textContent="–";
+  await requestWake();
+  R.timer=setInterval(()=>{$("#kDur").textContent=fmtClock((Date.now()-R.startT)/1000);if(Date.now()-session.end>60000){session.end=Date.now();DB.put("sessions",session)}},1000);
+  setRecUI();drawMeterLoop();
+}
+async function stopRec(){if(!R.on)return;R.on=false;clearInterval(R.timer);
+  try{R.det.flush()}catch(e){}try{R.node.disconnect();R.src.disconnect()}catch(e){}R.stream.getTracks().forEach(t=>t.stop());try{await R.ctx.close()}catch(e){}
+  R.session.end=Date.now();await R.chain;await DB.put("sessions",R.session);
+  if(R.wake){try{await R.wake.release()}catch(e){}R.wake=null}
+  $("#night").hidden=true;setRecUI();toast(R.count+" Knalle gespeichert");refreshSelectors();}
+async function requestWake(){try{if("wakeLock" in navigator){R.wake=await navigator.wakeLock.request("screen");return true}}catch(e){}
+  if(R.on&&!("wakeLock" in navigator))showEnv("Dieser Browser kann den Bildschirm nicht wach halten. Stell die automatische Sperre in den Geräte-Einstellungen für die Nacht auf «Nie».",false);return false}
+document.addEventListener("visibilitychange",async()=>{if(!R.on)return;
+  if(document.visibilityState==="hidden"){R.hiddenAt=Date.now()}
+  else{if(R.hiddenAt){const gap=[R.hiddenAt,Date.now()];if(gap[1]-gap[0]>5000){R.session.gaps.push(gap);DB.put("sessions",R.session);toast("Unterbruch von "+fmtDur((gap[1]-gap[0])/1000)+" (App war im Hintergrund)")}R.hiddenAt=null}
+    try{if(R.ctx.state!=="running")await R.ctx.resume()}catch(e){}requestWake()}});
+function setRecUI(){const b=$("#recBtn");b.textContent=R.on?"Aufnahme stoppen":"Aufnahme starten";b.classList.toggle("stop",R.on);b.classList.toggle("primary",!R.on);
+  const st=$("#status");st.textContent=R.on?"nimmt auf":"bereit";st.classList.toggle("rec",R.on);$("#nightBtn").disabled=!R.on}
+function showEnv(msg,err){const n=$("#envNote");n.textContent=msg;n.classList.toggle("err",!!err);n.hidden=false}
+
+function drawMeterLoop(){const cv=$("#meter");const draw=()=>{const {ctx,w,h}=setupCanvas(cv,90);ctx.clearRect(0,0,w,h);
+    const H=R.meterHist,n=Math.min(H.length,Math.floor((R.ctx?R.ctx.sampleRate:48000)*20/(R.det?R.det.frame:128)));const data=H.slice(H.length-n);
+    const lo=-100,hi=0,y=v=>h-(Math.max(lo,Math.min(hi,v))-lo)/(hi-lo)*h;const cs={getPropertyValue:css};
+    ctx.lineWidth=1;ctx.strokeStyle=cs.getPropertyValue("--line");for(let d=-80;d<0;d+=20){ctx.beginPath();ctx.moveTo(0,y(d));ctx.lineTo(w,y(d));ctx.stroke()}
+    if(data.length){const dx=w/Math.max(1,n-1);const line=(idx,col,off=0)=>{ctx.strokeStyle=col;ctx.beginPath();data.forEach((p,i)=>{const yy=y(p[idx]+off);i?ctx.lineTo(i*dx,yy):ctx.moveTo(i*dx,yy)});ctx.stroke()};
+      ctx.lineWidth=1;line(0,cs.getPropertyValue("--muted"));ctx.lineWidth=1.5;line(1,cs.getPropertyValue("--cold"));ctx.setLineDash([4,4]);line(1,cs.getPropertyValue("--wood"),opt.thr);ctx.setLineDash([]);
+      ctx.fillStyle=cs.getPropertyValue("--bang");data.forEach((p,i)=>{if(p[2])ctx.fillRect(i*dx-1.5,0,3,h)})}
+    ctx.fillStyle=cs.getPropertyValue("--muted");ctx.font="11px "+cs.getPropertyValue("--mono");ctx.fillText(data.length?Math.round(data[data.length-1][0])+" dB":"–",4,12);
+    if(R.on&&!document.hidden&&$("#night").hidden)requestAnimationFrame(draw);else if(R.on)setTimeout(draw,1000)};draw()}
+
+function micFail(e){const n=e&&e.name||"Fehler";let tip;
+  if(inArtifact)tip="Hier in Claude ist das Mikrofon immer gesperrt. Tippe oben auf «App herunterladen» und öffne die Datei danach aus dem Ordner «Downloads» mit Chrome.";
+  else if(n==="NotAllowedError"||n==="SecurityError")tip="Chrome hat das Mikrofon blockiert. Klicke links in der Adresszeile auf das Symbol neben der Adresse › Website-Einstellungen › Mikrofon › Zulassen, dann Seite neu laden. Unter Windows zusätzlich: Einstellungen › Datenschutz und Sicherheit › Mikrofon › «Desktop-Apps den Zugriff erlauben» einschalten.";
+  else if(n==="NotFoundError"||n==="OverconstrainedError")tip="Es wurde kein Mikrofon gefunden. Ist am PC ein Mikrofon oder Headset angeschlossen und unter Windows aktiviert?";
+  else if(n==="NotReadableError")tip="Das Mikrofon wird gerade von einem anderen Programm benutzt (z. B. Teams, Zoom) oder ist in Windows gesperrt.";
+  else tip="Unbekannter Fehler.";
+  showEnv(tip+" [Technisch: "+n+(e&&e.message?" – "+e.message:"")+" · "+location.protocol+" · "+APPVER+"]",true)}
+
+/* ================= Datei-Import ================= */
+let importBuf=null,importName="";
+async function onImportFile(f){if(!f)return;importName=f.name;$("#importBox").hidden=false;$("#importInfo").textContent="Lese «"+f.name+"» …";$("#importProg").textContent="";
+  try{const ab=await f.arrayBuffer();const AC=window.OfflineAudioContext||window.webkitOfflineAudioContext;const tmp=new (window.AudioContext||window.webkitAudioContext)();
+    importBuf=await new Promise((res,rej)=>{const p=tmp.decodeAudioData(ab,res,rej);if(p&&p.then)p.then(res,rej)});tmp.close&&tmp.close();
+    const dur=importBuf.duration;$("#importInfo").textContent="«"+f.name+"» · Länge "+fmtDur(dur)+" · "+importBuf.sampleRate+" Hz. Gib an, wann die Aufnahme begonnen hat, damit die Uhrzeiten stimmen.";
+    $("#importStart").value=toLocalInput((f.lastModified||Date.now())-dur*1000);
+  }catch(e){importBuf=null;$("#importInfo").textContent="Die Datei konnte nicht gelesen werden ("+(e&&e.message||e)+"). Versuche MP3, M4A oder WAV."}}
+async function runImport(){if(!importBuf)return;const start=new Date($("#importStart").value).getTime();if(!isFinite(start)){toast("Bitte Startzeit angeben");return}
+  const b=importBuf,sr=b.sampleRate,len=b.length;const ch=[];for(let c=0;c<b.numberOfChannels;c++)ch.push(b.getChannelData(c));
+  const session={id:uid(),start,end:start+b.duration*1000,gaps:[],source:"import",file:importName,opt:Object.assign({},opt),sr};
+  const found=[];const det=new Detector(sr,opt,c=>found.push(c));const CH=sr*10;$("#importGo").disabled=true;
+  for(let p=0;p<len;p+=CH){const n=Math.min(CH,len-p),x=new Float32Array(n);for(const c of ch)for(let i=0;i<n;i++)x[i]+=c[p+i]/ch.length;det.push(x);
+    $("#importProg").textContent="Analysiere … "+Math.round((p+n)/len*100)+" % · "+found.length+" Knalle";await new Promise(r=>setTimeout(r,0))}
+  det.flush();await DB.put("sessions",session);S.sessions.push(session);
+  for(const c of found)await saveEvent({t:start+c.trigIndex/sr*1000,session:session.id,source:"import"},c);
+  $("#importGo").disabled=false;$("#importBox").hidden=true;importBuf=null;toast(found.length+" Knalle gefunden");
+  refreshSelectors(nightKey(start));renderEvents();autoWeather()}
+
+/* ================= Wetter (Open-Meteo) ================= */
+function tempAt(t){const W=S.weather;if(!W.length)return null;let lo=0,hi=W.length-1;if(t<W[0].t||t>W[hi].t)return null;
+  while(hi-lo>1){const m=(lo+hi)>>1;if(W[m].t<=t)lo=m;else hi=m}const a=W[lo],b=W[hi];if(b.t-a.t>3*3600e3)return null;if(a.temp==null||b.temp==null){const v=a.temp??b.temp;return v==null?null:{temp:v,rh:null}}
+  const f=b.t===a.t?0:(t-a.t)/(b.t-a.t);return {temp:a.temp+(b.temp-a.temp)*f,rh:a.rh!=null&&b.rh!=null?a.rh+(b.rh-a.rh)*f:null}}
+async function fetchWeather(from,to){const day=t=>{const d=new Date(t);return d.getUTCFullYear()+"-"+pad(d.getUTCMonth()+1)+"-"+pad(d.getUTCDate())};
+  const now=Date.now(),recent=from>now-85*864e5;const base=recent?"https://api.open-meteo.com/v1/forecast":"https://archive-api.open-meteo.com/v1/archive";
+  const url=base+"?latitude="+loc.lat+"&longitude="+loc.lon+"&hourly=temperature_2m,relative_humidity_2m&timezone=GMT&start_date="+day(from-864e5)+"&end_date="+day(Math.min(to+864e5,now+864e5));
+  const r=await fetch(url);if(!r.ok)throw new Error("HTTP "+r.status);const j=await r.json();const h=j.hourly;const rows=h.time.map((tm,i)=>({t:Date.parse(tm+":00Z"),temp:h.temperature_2m[i],rh:h.relative_humidity_2m[i]})).filter(x=>x.temp!=null);
+  await DB.putMany("weather",rows);S.weather=(await DB.all("weather")).sort((a,b)=>a.t-b.t);return rows.length}
+async function loadWeatherAll(quiet){const ts=[...S.events.map(e=>e.t),...S.sessions.map(s=>s.start),...S.notes.map(n=>n.t)];if(!ts.length){if(!quiet)toast("Noch keine Daten");return}
+  const from=Math.min(...ts),to=Math.max(...ts);$("#wxStatus").textContent="lade …";
+  try{const n=await fetchWeather(from,to);$("#wxStatus").textContent=n+" Stundenwerte geladen ("+fmtDate(from)+"–"+fmtDate(to)+")";if(!quiet)toast("Wetterdaten aktualisiert");rerender()}
+  catch(e){$("#wxStatus").textContent=inArtifact?"Wetterdienst in der Vorschau auf claude.ai gesperrt. In der eigenständigen Datei funktioniert es.":"Wetterdaten nicht erreichbar ("+e.message+"). Internet prüfen."}}
+let wxTried=false;function autoWeather(){if(S.events.some(e=>!e.demo&&!tempAt(e.t)))loadWeatherAll(true)}
+
+/* ================= Diagramme ================= */
+function setupCanvas(cv,hCss){const dpr=window.devicePixelRatio||1,w=cv.clientWidth||300;cv.style.height=hCss+"px";cv.width=Math.round(w*dpr);cv.height=Math.round(hCss*dpr);const ctx=cv.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);return {ctx,w,h:hCss}}
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function axisText(ctx){ctx.fillStyle=css("--muted");ctx.font="11px "+css("--mono")}
+function drawTimeline(evs,notes,range){const cv=$("#cTimeline");const {ctx,w,h}=setupCanvas(cv,230);const L=38,Rp=36,T=12,B=26,pw=w-L-Rp,ph=h-T-B;
+  const [t0,t1]=range;const x=t=>L+(t-t0)/(t1-t0)*pw;
+  const dbs=evs.map(e=>e.peakDb);let dlo=Math.floor((Math.min(...dbs,-50)-3)/10)*10,dhi=Math.ceil((Math.max(...dbs,-10)+3)/10)*10;if(!evs.length){dlo=-60;dhi=0}const yd=v=>T+ph-(v-dlo)/(dhi-dlo)*ph;
+  ctx.strokeStyle=css("--line");ctx.lineWidth=1;axisText(ctx);ctx.textAlign="right";
+  for(let d=dlo;d<=dhi;d+=10){ctx.beginPath();ctx.moveTo(L,yd(d));ctx.lineTo(L+pw,yd(d));ctx.stroke();ctx.fillText(d,L-5,yd(d)+4)}
+  ctx.save();ctx.translate(10,T+ph/2);ctx.rotate(-Math.PI/2);ctx.textAlign="center";ctx.fillText("dBFS",0,0);ctx.restore();
+  // Zeitachse
+  ctx.textAlign="center";const span=t1-t0;const stepH=span>20*3600e3?6:span>8*3600e3?2:span>3*3600e3?1:0.25;const st=stepH*3600e3;
+  const tz=new Date(t0).getTimezoneOffset()*60e3;for(let t=Math.ceil((t0-tz)/st)*st+tz;t<=t1;t+=st){ctx.beginPath();ctx.moveTo(x(t),T+ph);ctx.lineTo(x(t),T+ph+4);ctx.stroke();ctx.fillText(fmtHM(t),x(t),h-8)}
+  // Notizen
+  ctx.strokeStyle=css("--wood");ctx.setLineDash([3,3]);notes.forEach(n=>{if(n.t<t0||n.t>t1)return;ctx.beginPath();ctx.moveTo(x(n.t),T);ctx.lineTo(x(n.t),T+ph);ctx.stroke()});ctx.setLineDash([]);
+  // Temperatur
+  const W=S.weather.filter(p=>p.t>=t0-3600e3&&p.t<=t1+3600e3);if(W.length>1){const ts=W.map(p=>p.temp);let lo=Math.floor(Math.min(...ts)-1),hi=Math.ceil(Math.max(...ts)+1);const yt=v=>T+ph-(v-lo)/(hi-lo)*ph;
+    ctx.save();ctx.beginPath();ctx.rect(L,T,pw,ph);ctx.clip();ctx.strokeStyle=css("--cold");ctx.lineWidth=2;ctx.beginPath();W.forEach((p,i)=>i?ctx.lineTo(x(p.t),yt(p.temp)):ctx.moveTo(x(p.t),yt(p.temp)));ctx.stroke();ctx.restore();
+    ctx.fillStyle=css("--cold");ctx.textAlign="left";ctx.font="11px "+css("--mono");const tick=Math.max(1,Math.round((hi-lo)/4));for(let v=lo;v<=hi;v+=tick)ctx.fillText(v+"°",L+pw+5,yt(v)+4)}
+  // Knalle
+  ctx.fillStyle=css("--bang");evs.forEach(e=>{ctx.globalAlpha=.85;ctx.beginPath();ctx.arc(x(e.t),yd(e.peakDb),3.2,0,7);ctx.fill()});ctx.globalAlpha=1;
+  // Sitzungen (Aufnahmezeiten) als Band
+  ctx.fillStyle=css("--ok");ctx.globalAlpha=.5;S.sessions.forEach(s=>{const a=Math.max(t0,s.start),b=Math.min(t1,s.end);if(b>a)ctx.fillRect(x(a),T+ph+1,x(b)-x(a),2)});ctx.globalAlpha=1}
+function drawBars(cv,vals,labels,opts={}){const {ctx,w,h}=setupCanvas(cv,opts.h||170);const L=30,T=16,B=24,pw=w-L-6,ph=h-T-B;const mx=Math.max(1,...vals.map(v=>v||0));const bw=pw/vals.length;
+  ctx.strokeStyle=css("--line");axisText(ctx);ctx.textAlign="right";const step=niceStep(mx);for(let v=0;v<=mx+1e-9;v+=step){const y=T+ph-v/mx*ph;ctx.beginPath();ctx.moveTo(L,y);ctx.lineTo(L+pw,y);ctx.stroke();ctx.fillText(opts.fmt?opts.fmt(v):Math.round(v*10)/10,L-4,y+4)}
+  vals.forEach((v,i)=>{if(!v)return;const bh=v/mx*ph;ctx.fillStyle=opts.colors?opts.colors[i]:css("--wood");ctx.fillRect(L+i*bw+1,T+ph-bh,Math.max(1,bw-2),bh)});
+  ctx.fillStyle=css("--muted");ctx.textAlign="center";const every=Math.ceil(labels.length/(pw/34));labels.forEach((l,i)=>{if(i%every===0&&l!=="")ctx.fillText(l,L+i*bw+bw/2,h-7)});
+  if(opts.top){ctx.font="10px "+css("--mono");opts.top.forEach((t,i)=>{if(t&&vals[i]!=null)ctx.fillText(t,L+i*bw+bw/2,T+ph-(vals[i]||0)/mx*ph-4)})}}
+function niceStep(mx){const raw=mx/4,p=Math.pow(10,Math.floor(Math.log10(raw||1))),n=raw/p;return (n<=1?1:n<=2?2:n<=5?5:10)*p}
+function drawSpectrum(evs){const cv=$("#cSpectrum");const {ctx,w,h}=setupCanvas(cv,170);const L=30,T=10,B=24,pw=w-L-6,ph=h-T-B;
+  const avg=new Array(BANDS).fill(0),cnt=new Array(BANDS).fill(0);evs.forEach(e=>(e.bands||[]).forEach((v,i)=>{if(v!=null){avg[i]+=v;cnt[i]++}}));const a=avg.map((v,i)=>cnt[i]?v/cnt[i]:null);
+  const vs=a.filter(v=>v!=null);if(!vs.length){axisText(ctx);ctx.fillText("Noch keine Daten",L+10,h/2);return null}
+  const mx=Math.max(...vs),mn=mx-50;const y=v=>T+ph-(Math.max(mn,v)-mn)/(mx-mn)*ph;const bw=pw/BANDS;
+  ctx.strokeStyle=css("--line");axisText(ctx);ctx.textAlign="right";for(let d=0;d>=-50;d-=10){ctx.beginPath();ctx.moveTo(L,y(mx+d));ctx.lineTo(L+pw,y(mx+d));ctx.stroke();ctx.fillText(d,L-4,y(mx+d)+4)}
+  const grd=ctx.createLinearGradient(0,T,0,T+ph);grd.addColorStop(0,css("--wood"));grd.addColorStop(1,"rgba(224,163,91,0.15)");ctx.fillStyle=grd;
+  a.forEach((v,i)=>{if(v==null)return;ctx.fillRect(L+i*bw+1,y(v),bw-2,T+ph-y(v))});
+  ctx.fillStyle=css("--muted");ctx.textAlign="center";[200,500,1000,2000,5000,10000].forEach(f=>{const i=Math.log(f/BLO)/Math.log(BHI/BLO)*BANDS;ctx.fillText(f>=1000?f/1000+"k":f,L+i*bw,h-7)});
+  let bi=0;a.forEach((v,i)=>{if(v!=null&&v>a[bi])bi=i});return bandCenter(bi)}
+function drawMiniSpec(cv,bands){const {ctx,w,h}=setupCanvas(cv,22);if(!bands)return;const vs=bands.filter(v=>v!=null);if(!vs.length)return;const mx=Math.max(...vs),mn=mx-40,bw=w/bands.length;
+  bands.forEach((v,i)=>{if(v==null)return;const f=Math.max(0,(v-mn)/(mx-mn));ctx.fillStyle="rgba(224,163,91,"+(0.12+f*0.88).toFixed(2)+")";ctx.fillRect(i*bw,0,bw-1,h)})}
+
+/* ================= Auswertung ================= */
+function periodicity(evs){const iv=[];for(let i=1;i<evs.length;i++){const d=(evs[i].t-evs[i-1].t)/1000;if(d<1800&&evs[i].session===evs[i-1].session)iv.push(d)}
+  const med=median(iv);if(!med)return {iv,med:null,share:0};const share=iv.filter(d=>Math.abs(d-med)<=Math.max(10,med*.15)).length/iv.length;return {iv,med,share}}
+function coverageMs(t0,t1){let ms=0;S.sessions.forEach(s=>{const a=Math.max(t0,s.start),b=Math.min(t1,s.end);if(b>a){ms+=b-a;(s.gaps||[]).forEach(g=>{const ga=Math.max(a,g[0]),gb=Math.min(b,g[1]);if(gb>ga)ms-=gb-ga})}});return ms}
+function selRange(key){if(key==="all"){const ts=[...S.events.map(e=>e.t),...S.sessions.flatMap(s=>[s.start,s.end])];if(!ts.length)return [Date.now()-12*3600e3,Date.now()];return [Math.min(...ts)-600e3,Math.max(...ts)+600e3]}
+  const [y,m,d]=key.split("-").map(Number);let t0=new Date(y,m-1,d,12).getTime(),t1=t0+24*3600e3;
+  const ts=[...S.events.filter(e=>nightKey(e.t)===key).map(e=>e.t),...S.sessions.filter(s=>nightKey(s.start)===key).flatMap(s=>[s.start,s.end])];
+  if(ts.length){t0=Math.max(t0,Math.min(...ts)-15*60e3);t1=Math.min(t1,Math.max(...ts)+15*60e3)}return [t0,t1]}
+function renderAnalysis(){const key=$("#nightSel2").value||"all";const [t0,t1]=selRange(key);
+  const evs=S.events.filter(e=>key==="all"||nightKey(e.t)===key);const notes=S.notes.filter(n=>n.t>=t0&&n.t<=t1);
+  const per=periodicity(evs);const cov=coverageMs(t0,t1)/3600e3;const rate=cov>0?evs.length/cov:null;
+  const after=evs.filter(e=>e.after&&e.after.length);const afterGap=median(after.map(e=>e.after[0]));
+  const k=$("#anKpis");k.innerHTML="";const add=(v,l)=>{const d=document.createElement("div");d.className="kpi";d.innerHTML="<b class='mono'></b><span></span>";d.children[0].textContent=v;d.children[1].textContent=l;k.appendChild(d)};
+  add(evs.length,"Knalle");add(cov?fmtDur(cov*3600):"–","aufgenommen");add(rate!=null?rate.toFixed(1):"–","Knalle pro Stunde");add(per.med?fmtDur(per.med):"–","typischer Abstand (Median)");
+  add(evs.length?Math.round(median(evs.map(e=>e.peakDb)))+" dB":"–","Lautstärke (Median, relativ)");add(after.length?Math.round(after.length/evs.length*100)+" %":"–","mit Nachknacken"+(afterGap?" (nach "+(afterGap/1000).toFixed(2)+" s)":""));
+  // Urteil
+  const v=$("#verdict");v.classList.remove("strong");
+  if(evs.length<5)v.innerHTML="<b>Noch zu wenig Daten.</b> Ab etwa 5 Knallen in einer Nacht lässt sich ein Rhythmus erkennen.";
+  else if(per.med&&per.share>=.5&&per.iv.length>=4){v.classList.add("strong");v.innerHTML="<b>Fester Takt erkannt: etwa alle "+esc(fmtDur(per.med))+".</b> "+Math.round(per.share*100)+" % der Abstände liegen nahe an diesem Wert. Ein so gleichmässiger Rhythmus deutet auf etwas Technisches hin, das zyklisch arbeitet, z. B. Takten der Wärmepumpe und Heizungsrohre, die sich dabei ausdehnen. Vergleiche die Uhrzeiten mit dem Verlauf der Novelan."}
+  else if(per.med&&per.share>=.3)v.innerHTML="<b>Teilweise regelmässig.</b> "+Math.round(per.share*100)+" % der Abstände liegen nahe "+esc(fmtDur(per.med))+". Möglich ist ein Takt, der zeitweise läuft (z. B. nur in kalten Stunden), dazwischen unregelmässige Knacke.";
+  else v.innerHTML="<b>Kein fester Takt.</b> Die Abstände streuen stark. Das passt eher zu Holz oder Blech, das sich mit Temperatur und Feuchte bewegt, als zu einer taktenden Anlage.";
+  drawTimeline(evs,notes,key==="all"?[t0,t1]:[t0,t1]);
+  // Abstände: 15-s-Klassen bis 10 min
+  const bins=new Array(40).fill(0);per.iv.forEach(d=>{const i=Math.min(39,Math.floor(d/15));bins[i]++});drawBars($("#cIntervals"),bins,bins.map((_,i)=>i%4===0?(i/4)+"′":""),{colors:bins.map((_,i)=>per.med&&Math.abs(i*15+7.5-per.med)<=Math.max(15,per.med*.15)?css("--bang"):css("--wood"))});
+  const peakF=drawSpectrum(evs);const cen=median(evs.map(e=>e.centroid).filter(Boolean));
+  $("#specText").textContent=evs.length?"Stärkster Bereich um "+(peakF>=1000?(peakF/1000).toFixed(1)+" kHz":Math.round(peakF)+" Hz")+", Schwerpunkt "+(cen?(cen/1000).toFixed(1)+" kHz":"–")+". Breitbandig und hoch heisst: harter, trockener Knack (Holz/Metall in Halterung). Tiefes Wummern wäre eher Rohr/Wasserschlag.":"";
+  const hours=new Array(24).fill(0);evs.forEach(e=>hours[new Date(e.t).getHours()]++);const order=[...Array(24).keys()].map(i=>(i+12)%24);drawBars($("#cHours"),order.map(i=>hours[i]),order.map(i=>i%3===0?String(i):""));
+  // Rate nach Temperatur
+  const tb={};const binOf=t=>Math.floor(t/2)*2;S.sessions.forEach(s=>{if(key!=="all"&&nightKey(s.start)!==key)return;for(let t=s.start;t<s.end;t+=10*60e3){if((s.gaps||[]).some(g=>t>=g[0]&&t<g[1]))continue;const w=tempAt(t+5*60e3);if(!w)continue;const b=binOf(w.temp);(tb[b]=tb[b]||{h:0,n:0}).h+=Math.min(10*60e3,s.end-t)/3600e3}});
+  evs.forEach(e=>{const w=tempAt(e.t);if(!w)return;const b=binOf(w.temp);(tb[b]=tb[b]||{h:0,n:0}).n++});
+  const keys=Object.keys(tb).map(Number).sort((a,b)=>a-b);const cv=$("#cTemp");
+  if(!keys.length){const {ctx,w,h}=setupCanvas(cv,170);axisText(ctx);ctx.fillText("Wetterdaten fehlen. Unter «Klima» laden.",10,h/2)}
+  else drawBars(cv,keys.map(b=>tb[b].h>=.25?tb[b].n/tb[b].h:null),keys.map(b=>b+"°"),{colors:keys.map(()=>css("--cold")),top:keys.map(b=>tb[b].h>=.25?tb[b].h.toFixed(1)+"h":"")});
+  // Notizen-Tabelle
+  const nt=$("#noteTable");const rows=S.notes.filter(n=>key==="all"||nightKey(n.t)===key);
+  if(!rows.length){nt.innerHTML="<tr><td class='muted'>Keine Notizen in diesem Zeitraum. Erfasse sie unter «Klima».</td></tr>";}
+  else{nt.innerHTML="<tr><th>Zeit</th><th>Notiz</th><th class='num'>Feuchte</th><th class='num'>Innen</th><th class='num'>Knalle 1 h davor</th><th class='num'>1 h danach</th></tr>"+rows.map(n=>{const b=S.events.filter(e=>e.t>=n.t-3600e3&&e.t<n.t).length,a=S.events.filter(e=>e.t>=n.t&&e.t<n.t+3600e3).length;
+    return "<tr><td class='mono'>"+esc(fmtDate(n.t)+" "+fmtHM(n.t))+"</td><td>"+esc(n.text||"")+"</td><td class='num'>"+(n.rh!=null?esc(n.rh)+" %":"–")+"</td><td class='num'>"+(n.tin!=null?esc(n.tin)+"°":"–")+"</td><td class='num'>"+b+"</td><td class='num'>"+a+"</td></tr>"}).join("")}}
+
+/* ================= Archiv-Liste ================= */
+const urls=new Map();let playing=null;
+async function playEvent(e,btn){if(playing){playing.pause();playing=null}
+  let src;if(e.demo){src=URL.createObjectURL(synthCrack(e))}else{const c=await DB.get("clips",e.id);if(!c){toast("Kein Tonausschnitt gespeichert");return}src=URL.createObjectURL(c.blob)}
+  const a=new Audio(src);playing=a;btn.classList.add("on");a.onended=()=>{btn.classList.remove("on");URL.revokeObjectURL(src)};a.play().catch(()=>toast("Wiedergabe nicht möglich"))}
+function renderEvents(){const key=$("#nightSel").value||"all";const evs=S.events.filter(e=>key==="all"||nightKey(e.t)===key);
+  $("#evHead").textContent=key==="all"?"Alle Ereignisse":nightLabel(key);$("#evSub").textContent=evs.length+" Knalle";
+  const list=$("#evList");list.innerHTML="";
+  if(!evs.length){list.innerHTML="<p class='muted small' style='padding:8px 0'>Noch keine Knalle gespeichert. Starte eine Aufnahme, importiere eine Datei aus Sleep Talk Recorder oder lade unter «Mehr» eine Beispielnacht.</p>";return}
+  const show=evs.slice(-300).reverse();show.forEach((e,idx)=>{const i=evs.indexOf(e);const prev=i>0&&evs[i-1].session===e.session?evs[i-1]:null;const w=tempAt(e.t);
+    const row=document.createElement("div");row.className="ev";
+    row.innerHTML="<button class='play' aria-label='Abspielen'><svg viewBox='0 0 16 16'><path d='M4 2l10 6-10 6z'/></svg></button><div><div class='t'></div><div class='meta'></div></div><button class='btn sm'>Löschen</button><canvas class='spec'></canvas>";
+    row.querySelector(".t").textContent=fmtTime(e.t)+(key==="all"?"  "+fmtDate(e.t):"");
+    const parts=[e.peakDb+" dB"];if(prev)parts.push("+"+fmtDur((e.t-prev.t)/1000));if(e.centroid)parts.push((e.centroid/1000).toFixed(1)+" kHz");if(e.after&&e.after.length)parts.push(e.after.length+"× Nachknack");if(w)parts.push(w.temp.toFixed(1)+" °C aussen");
+    const meta=row.querySelector(".meta");meta.textContent=parts.join(" · ");if(e.demo){const c=document.createElement("span");c.className="chip demo";c.textContent="Beispiel";meta.append(" ",c)}else if(e.source==="import"){const c=document.createElement("span");c.className="chip";c.textContent="importiert";meta.append(" ",c)}
+    row.querySelector(".play").onclick=ev=>playEvent(e,ev.currentTarget);
+    const del=row.querySelector(".btn");del.onclick=async()=>{if(del.dataset.arm){await DB.del("events",e.id);await DB.del("clips",e.id);S.events=S.events.filter(x=>x.id!==e.id);renderEvents()}else{del.dataset.arm=1;del.textContent="Sicher?";del.classList.add("danger");setTimeout(()=>{if(del.isConnected){delete del.dataset.arm;del.textContent="Löschen";del.classList.remove("danger")}},3000)}};
+    list.appendChild(row);requestAnimationFrame(()=>drawMiniSpec(row.querySelector(".spec"),e.bands))});
+  if(evs.length>300){const p=document.createElement("p");p.className="small muted";p.style.paddingTop="8px";p.textContent="Angezeigt: die letzten 300. Wähle oben eine einzelne Nacht.";list.appendChild(p)}}
+
+function refreshSelectors(prefer){const keys=new Set([...S.events.map(e=>nightKey(e.t)),...S.sessions.map(s=>nightKey(s.start))]);const arr=[...keys].sort().reverse();
+  [$("#nightSel"),$("#nightSel2")].forEach(sel=>{const cur=prefer||sel.value;sel.innerHTML="";arr.forEach(k=>{const o=document.createElement("option");o.value=k;const n=S.events.filter(e=>nightKey(e.t)===k).length;o.textContent=nightLabel(k)+" · "+n+" Knalle";sel.appendChild(o)});
+    const o=document.createElement("option");o.value="all";o.textContent="Alle Nächte";sel.appendChild(o);sel.value=arr.includes(cur)||cur==="all"?cur:(arr[0]||"all")})}
+
+/* ================= Klima / Notizen ================= */
+const QUICK=["Dusche, Tür offen","Gelüftet","Heizung aus","Heizung wieder an","Wärmepumpe läuft","Wärmepumpe steht","Sonne aufs Dach","Wäsche getrocknet"];
+function renderNotes(){const t=$("#notesAll");if(!S.notes.length){t.innerHTML="<tr><td class='muted'>Noch keine Notizen.</td></tr>";return}
+  t.innerHTML="<tr><th>Zeit</th><th>Notiz</th><th class='num'>Feuchte</th><th class='num'>Innen</th><th class='num'>Dachstock</th><th class='num'>Aussen</th><th></th></tr>";
+  [...S.notes].reverse().forEach(n=>{const tr=document.createElement("tr");const w=tempAt(n.t);
+    tr.innerHTML="<td class='mono'></td><td></td><td class='num'></td><td class='num'></td><td class='num'></td><td class='num'></td><td><button class='btn sm'>Löschen</button></td>";
+    const c=tr.children;c[0].textContent=fmtDate(n.t)+" "+fmtHM(n.t);c[1].textContent=n.text||"";c[2].textContent=n.rh!=null?n.rh+" %":"–";c[3].textContent=n.tin!=null?n.tin+"°":"–";c[4].textContent=n.tatt!=null?n.tatt+"°":"–";c[5].textContent=w?w.temp.toFixed(1)+"°":"–";
+    const b=tr.querySelector("button");b.onclick=async()=>{if(b.dataset.arm){await DB.del("notes",n.id);S.notes=S.notes.filter(x=>x.id!==n.id);renderNotes()}else{b.dataset.arm=1;b.textContent="Sicher?";b.classList.add("danger")}};t.appendChild(tr)})}
+async function saveNote(text){const t=new Date($("#nTime").value).getTime();const n={id:uid(),t:isFinite(t)?t:Date.now(),text:text??$("#nText").value.trim(),rh:num($("#nRh").value),tin:num($("#nT").value),tatt:num($("#nTa").value)};
+  if(!n.text&&n.rh==null&&n.tin==null&&n.tatt==null){toast("Bitte etwas eintragen");return}
+  await DB.put("notes",n);S.notes.push(n);S.notes.sort((a,b)=>a.t-b.t);["#nText","#nRh","#nT","#nTa"].forEach(s=>$(s).value="");$("#nTime").value=toLocalInput(Date.now());renderNotes();toast("Notiz gespeichert · "+fmtHM(n.t))}
+
+/* ================= Beispielnacht ================= */
+function synthCrack(e){const sr=22050,n=sr*3,x=new Float32Array(n);const amp=Math.pow(10,(e.peakDb||-20)/20);let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647*2-1};
+  const hit=(at,a)=>{for(let i=0;i<sr*.06;i++){const k=at+i;if(k<n)x[k]+=a*rnd()*Math.exp(-i/(sr*.006))}};
+  for(let i=0;i<n;i++)x[i]=rnd()*0.002;hit(sr,amp);(e.after||[]).forEach(ms=>hit(sr+Math.round(ms/1000*sr),amp*.35));
+  let lp=0;for(let i=0;i<n;i++){const hpv=x[i]-lp;lp+=0.25*(x[i]-lp);x[i]=hpv}return encodeWav(x,sr)}
+async function loadDemo(){const base=new Date();base.setDate(base.getDate()-1);base.setHours(21,40,0,0);const t0=base.getTime(),end=t0+9*3600e3;
+  let s=11;const r=()=>{s=(s*16807)%2147483647;return s/2147483647};
+  const session={id:"demo-session",start:t0,end,gaps:[],source:"demo",demo:true};const evs=[];
+  const bandsFor=()=>Array.from({length:BANDS},(_,i)=>{const f=bandCenter(i);return Math.round((-70+28*Math.exp(-Math.pow(Math.log(f/2500),2)/0.9)+r()*4)*10)/10});
+  // Takt-Phase 23:05–02:50 alle ~3 min
+  for(let t=t0+85*60e3;t<t0+310*60e3;t+=(175+r()*12)*1000){if(r()<.9)evs.push(t)}
+  // vereinzelt danach
+  for(let k=0;k<9;k++)evs.push(t0+330*60e3+r()*200*60e3);
+  // nach Dusche 22:15 weniger: nichts zwischen 22:15 und 23:05
+  for(let k=0;k<4;k++)evs.push(t0+r()*30*60e3);
+  const out=evs.sort((a,b)=>a-b).map(t=>({id:"demo-"+Math.round(t),t:Math.round(t),session:session.id,source:"demo",demo:true,peakDb:Math.round((-34+r()*14)*10)/10,floorDb:-68,snr:30,centroid:Math.round(2300+r()*700),dominant:Math.round(2000+r()*900),bands:bandsFor(),after:r()<.7?[210]:r()<.5?[205,420]:[],decayMs:40}));
+  const notes=[{id:"demo-n1",t:t0+35*60e3,text:"Dusche, Tür offen (Beispiel)",rh:48,tin:21.5,demo:true},{id:"demo-n2",t:t0+80*60e3,text:"Gelüftet (Beispiel)",rh:31,tin:20.8,demo:true}];
+  const wx=[];for(let h=-2;h<12;h++){const t=Math.floor(t0/3600e3)*3600e3+h*3600e3;wx.push({t,temp:Math.round((1-0.55*h+Math.sin(h)*.4)*10)/10,rh:70+h,demo:true})}
+  await DB.put("sessions",session);await DB.putMany("events",out);await DB.putMany("notes",notes);
+  const have=new Set(S.weather.map(w=>w.t));await DB.putMany("weather",wx.filter(w=>!have.has(w.t)));
+  await loadAll();refreshSelectors(nightKey(t0+3600e3));rerender();toast("Beispielnacht geladen ("+out.length+" Knalle)")}
+async function removeDemo(){for(const e of S.events.filter(x=>x.demo))await DB.del("events",e.id);for(const n of S.notes.filter(x=>x.demo))await DB.del("notes",n.id);
+  for(const w of S.weather.filter(x=>x.demo))await DB.del("weather",w.t);await DB.del("sessions","demo-session");await loadAll();refreshSelectors();rerender();toast("Beispiele entfernt")}
+
+/* ================= Export / Import ================= */
+async function saveFile(name,data,type){const blob=data instanceof Blob?data:new Blob([data],{type});
+  if(inArtifact){try{const d=await window.claude.use("downloads");if(d){await d.save({filename:name,data:blob});return}}catch(e){if(e&&e.code==="declined")return;toast("Speichern nicht möglich ("+(e&&e.code||"Fehler")+")");return}toast("Speichern ist hier nicht verfügbar");return}
+  const u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),8000)}
+function csv(){const h=["Datum","Uhrzeit","Nacht","Abstand_s","Pegel_dBFS","Grundrauschen_dBFS","Ueber_Rauschen_dB","Schwerpunkt_Hz","Spitze_Hz","Nachknacke","Nachknack_ms","Aussen_C","Aussen_rF","Quelle"];
+  const rows=S.events.map((e,i)=>{const p=i>0&&S.events[i-1].session===e.session?S.events[i-1]:null;const w=tempAt(e.t);const d=new Date(e.t);
+    return [d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()),fmtTime(e.t),nightKey(e.t),p?((e.t-p.t)/1000).toFixed(1):"",e.peakDb,e.floorDb,e.snr,e.centroid??"",e.dominant??"",(e.after||[]).length,(e.after||[]).join("/"),w?w.temp.toFixed(1):"",w&&w.rh!=null?Math.round(w.rh):"",e.demo?"Beispiel":e.source].join(";")});
+  return "﻿"+[h.join(";"),...rows].join("\n")}
+const b64=blob=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(String(f.result).split(",")[1]);f.readAsDataURL(blob)});
+async function backup(){toast("Sicherung wird erstellt …");const clips=[];for(const e of S.events){if(e.demo)continue;const c=await DB.get("clips",e.id);if(c)clips.push({id:c.id,trigOff:c.trigOff,wav:await b64(c.blob)})}
+  const data={app:"knall-logger",version:1,exported:new Date().toISOString(),loc,events:S.events.filter(e=>!e.demo),notes:S.notes.filter(n=>!n.demo),sessions:S.sessions.filter(s=>!s.demo),weather:S.weather.filter(w=>!w.demo),clips};
+  await saveFile("knall-logger-sicherung-"+new Date().toISOString().slice(0,10)+".json",JSON.stringify(data),"application/json")}
+async function restore(f){try{const d=JSON.parse(await f.text());if(d.app!=="knall-logger")throw new Error("keine Knall-Logger-Sicherung");
+  await DB.putMany("events",d.events||[]);await DB.putMany("notes",d.notes||[]);await DB.putMany("sessions",d.sessions||[]);await DB.putMany("weather",d.weather||[]);
+  for(const c of d.clips||[]){const bin=atob(c.wav),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);await DB.put("clips",{id:c.id,trigOff:c.trigOff,blob:new Blob([u],{type:"audio/wav"})})}
+  await loadAll();refreshSelectors();rerender();toast((d.events||[]).length+" Knalle importiert")}catch(e){toast("Import fehlgeschlagen: "+e.message)}}
+
+/* ================= Navigation & Einstellungen ================= */
+let currentView="rec";
+function show(v){currentView=v;document.querySelectorAll("section.view").forEach(s=>s.hidden=s.id!=="v-"+v);document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.v===v));store.set("view",v);rerender();window.scrollTo(0,0)}
+function rerender(){if(currentView==="ev")renderEvents();if(currentView==="an")renderAnalysis();if(currentView==="cl"){renderNotes();wxInfo()}if(currentView==="set")setInfo()}
+function wxInfo(){const n=S.weather.length;$("#wxInfo").textContent="Standort: "+loc.name+" ("+(+loc.lat).toFixed(3)+", "+(+loc.lon).toFixed(3)+"). "+(n?n+" Stundenwerte gespeichert, bis "+fmtDate(S.weather[n-1].t)+" "+fmtHM(S.weather[n-1].t)+".":"Noch keine Wetterdaten.")+" Werte werden jedem Knall automatisch zugeordnet."}
+async function setInfo(){let s="";try{if(navigator.storage&&navigator.storage.estimate){const e=await navigator.storage.estimate();s=" Belegt: "+(e.usage/1048576).toFixed(1)+" MB."}}catch(e){}
+  $("#storeInfo").textContent=S.events.length+" Knalle, "+S.notes.length+" Notizen, "+S.sessions.length+" Aufnahmen gespeichert."+s+(DB.mem?" Achtung: Dieser Browser erlaubt keinen dauerhaften Speicher, Daten gehen beim Schliessen verloren.":"")}
+function bindSliders(){const map=[["#sThr","#oThr","thr",v=>v+" dB"],["#sOn","#oOn","onset",v=>v+" dB"],["#sHp","#oHp","hpHz",v=>v+" Hz"],["#sGap","#oGap","minGap",v=>(+v).toFixed(1)+" s"]];
+  map.forEach(([s,o,k,f])=>{const el=$(s);el.value=opt[k];$(o).textContent=f(opt[k]);el.oninput=()=>{opt[k]=+el.value;$(o).textContent=f(el.value);store.set("opt",opt);if(R.on&&R.det){R.det.o=opt;if(k==="hpHz")R.det.hp=biquadHP(opt.hpHz,R.det.sr)}}})}
+
+function testCrack(){const AC=window.AudioContext||window.webkitAudioContext;const c=new AC();const e={peakDb:-6,after:[210]};const blob=synthCrack(e);const a=new Audio(URL.createObjectURL(blob));a.play().catch(()=>{});c.close&&c.close()}
+
+async function init(){$("#ver").textContent=APPVER;await DB.open();await loadAll();
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>show(b.dataset.v));
+  $("#recBtn").onclick=()=>R.on?stopRec():startRec();
+  $("#nightBtn").onclick=()=>{$("#night").hidden=false};$("#night").onclick=()=>{$("#night").hidden=true;drawMeterLoop()};
+  $("#testBtn").onclick=testCrack;
+  $("#importBtn").onclick=()=>$("#importFile").click();$("#importFile").onchange=e=>{onImportFile(e.target.files[0]);e.target.value=""};
+  $("#importGo").onclick=runImport;$("#importCancel").onclick=()=>{importBuf=null;$("#importBox").hidden=true};
+  $("#nightSel").onchange=renderEvents;$("#nightSel2").onchange=renderAnalysis;
+  const q=$("#quick");QUICK.forEach(t=>{const b=document.createElement("button");b.className="btn sm";b.textContent=t;b.onclick=()=>{$("#nText").value=t;$("#nTime").value=toLocalInput(Date.now())};q.appendChild(b)});
+  $("#nTime").value=toLocalInput(Date.now());$("#nSave").onclick=()=>saveNote();
+  $("#wxLoad").onclick=()=>loadWeatherAll(false);
+  bindSliders();$("#resetSet").onclick=()=>{opt=Object.assign({},DEF);store.set("opt",opt);bindSliders();toast("Standardwerte gesetzt")};
+  $("#lName").value=loc.name;$("#lLat").value=loc.lat;$("#lLon").value=loc.lon;
+  $("#locSave").onclick=()=>{const la=num($("#lLat").value),lo=num($("#lLon").value);if(la==null||lo==null){toast("Koordinaten ungültig");return}loc={name:$("#lName").value||"Mein Ort",lat:la,lon:lo};store.set("loc",loc);S.weather=[];DB.clear("weather").then(()=>{toast("Standort gespeichert");autoWeather()})};
+  $("#geoBtn").onclick=()=>{if(!navigator.geolocation){toast("Standort nicht verfügbar");return}navigator.geolocation.getCurrentPosition(p=>{$("#lLat").value=p.coords.latitude.toFixed(4);$("#lLon").value=p.coords.longitude.toFixed(4);$("#lName").value="Mein Standort";toast("Standort übernommen, jetzt speichern")},()=>toast(inArtifact?"Standort ist in der Vorschau gesperrt. Koordinaten bitte eintippen.":"Standort nicht freigegeben"),{timeout:10000})};
+  $("#expCsv").onclick=()=>saveFile("knall-logger-ereignisse.csv",csv(),"text/csv");$("#expJson").onclick=backup;
+  $("#impJson").onclick=()=>$("#impJsonFile").click();$("#impJsonFile").onchange=e=>{if(e.target.files[0])restore(e.target.files[0]);e.target.value=""};
+  $("#demoBtn").onclick=loadDemo;$("#demoDel").onclick=removeDemo;
+  const wipe=$("#wipe");wipe.onclick=async()=>{if(!wipe.dataset.arm){wipe.dataset.arm=1;wipe.textContent="Wirklich alles löschen?";setTimeout(()=>{delete wipe.dataset.arm;wipe.textContent="Alles löschen"},4000);return}
+    for(const s of ["events","notes","sessions","clips","weather"])await DB.clear(s);await loadAll();refreshSelectors();rerender();wipe.textContent="Alles löschen";delete wipe.dataset.arm;toast("Alle Daten gelöscht")};
+  if(inArtifact){$("#dlBox").hidden=false;$("#dlApp").onclick=async()=>{try{const r=await fetch("knall-logger-app.html",{cache:"no-store"});if(!r.ok)throw new Error("HTTP "+r.status);const txt=await r.text();const d=await window.claude.use("downloads");if(!d)throw new Error("Speichern hier nicht verfügbar");await d.save({filename:"knall-logger.html",data:new Blob([txt],{type:"text/html"})});$("#dlInfo").textContent="Gespeichert als knall-logger.html. Jetzt im Explorer: Downloads › Rechtsklick auf knall-logger.html › Öffnen mit › Google Chrome."}catch(e){$("#dlInfo").textContent=e&&e.code==="declined"?"Abgebrochen.":"Herunterladen ging nicht ("+(e&&(e.code||e.message))+")."}}}
+  if(inArtifact)showEnv("Vorschau: Auf claude.ai sind Mikrofon und Wetterdienst gesperrt. Für die Nachtaufnahme die Datei knall-logger.html direkt im Browser öffnen. Hier kannst du die Beispielnacht ansehen und Aufnahmen aus Sleep Talk Recorder importieren.",false);
+  if(!S.events.length&&!store.get("demoSeen",false)){store.set("demoSeen",true);await loadDemo()}
+  refreshSelectors();show(store.get("view","rec"));drawMeterLoop();autoWeather();
+  window.addEventListener("resize",()=>{clearTimeout(window.__rs);window.__rs=setTimeout(rerender,200)});
+}
+init();
+</script>
+
+</body></html>
