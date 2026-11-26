@@ -49,6 +49,21 @@ p{margin:0}
 .btn.danger{color:var(--bang);border-color:#5a2a27}
 .btn.big{font-family:var(--display);font-size:24px;letter-spacing:.04em;text-transform:uppercase;padding:16px 22px;width:100%}
 .btn.stop{background:var(--bang);border-color:var(--bang);color:#1d0503}
+.recwrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding-block:10px 4px}
+.recbtn{width:116px;height:116px;border-radius:50%;border:4px solid var(--fg);background:var(--bg);display:grid;place-items:center;cursor:pointer;position:relative;transition:transform .12s ease,border-color .2s;-webkit-tap-highlight-color:transparent}
+.recbtn:hover{border-color:var(--wood)}
+.recbtn:active{transform:scale(.92)}
+.recbtn .dot{width:88px;height:88px;border-radius:50%;background:var(--bang);transition:width .25s ease,height .25s ease,border-radius .25s ease}
+.recbtn.rec{border-color:var(--bang)}
+.recbtn.rec .dot{width:42px;height:42px;border-radius:9px}
+.recbtn.rec::after{content:"";position:absolute;inset:-12px;border-radius:50%;border:2px solid var(--bang);animation:ring 1.8s ease-out infinite;pointer-events:none}
+@keyframes ring{from{transform:scale(.92);opacity:.85}to{transform:scale(1.18);opacity:0}}
+.recbtn:focus-visible{outline:2px solid var(--wood);outline-offset:6px}
+.reclbl{font-family:var(--display);font-size:20px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.play{transition:transform .1s ease,background .15s;-webkit-tap-highlight-color:transparent}
+.play:active{transform:scale(.86)}
+.play.on{background:conic-gradient(var(--wood) calc(var(--p,0)*360deg),#6b4b25 0);border-color:var(--wood)}
+@media (prefers-reduced-motion:reduce){.recbtn.rec::after{animation:none}.recbtn .dot{transition:none}}
 .btn.sm{font-size:13px;padding:6px 10px;min-height:32px}
 .btn:disabled{opacity:.45;cursor:default}
 label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0}
@@ -71,6 +86,7 @@ canvas{display:block;width:100%;max-width:100%}
 .ev .spec{grid-column:2/4;height:22px}
 .play{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--fg);cursor:pointer;display:grid;place-items:center}
 .play svg{width:16px;height:16px;fill:currentColor}
+.play.on{background:var(--wood);border-color:var(--wood);color:#1a1108}
 .chip{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);font-family:var(--body)}
 .chip.type{font-weight:600}
 .typesel{font:600 12px var(--body);padding:2px 6px;border-radius:99px;background:var(--panel2);max-width:9.5em}
@@ -110,7 +126,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:14px}
   <div id="envNote" class="notice" hidden></div>
   <div id="dlBox" class="card" hidden><h3>App für die Nacht holen</h3><p class="small">Hier in Claude ist das Mikrofon immer gesperrt. Lade die App als Datei herunter und öffne sie danach aus dem Ordner «Downloads» mit Chrome.</p><div class="row" style="margin-top:10px"><button id="dlApp" class="btn primary">App herunterladen</button></div><p class="small muted" id="dlInfo" style="margin-top:8px"></p></div>
   <div class="card">
-    <button id="recBtn" class="btn big primary">Aufnahme starten</button>
+    <div class="recwrap"><button id="recBtn" class="recbtn" aria-label="Aufnahme starten"><span class="dot"></span></button><div id="recLbl" class="reclbl">Aufnahme starten</div></div>
     <p class="small muted" style="margin-top:10px">Das Gerät hört dauerhaft mit, speichert aber nur kurze Ausschnitte rund um jeden Knall (1 s davor, 2 s danach). Alles bleibt auf diesem Gerät.</p>
   </div>
   <div class="card">
@@ -335,7 +351,7 @@ let toastT;function toast(msg){const el=$("#toast");el.textContent=msg;el.hidden
 const store={get(k,d){try{const v=localStorage.getItem("knall:"+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem("knall:"+k,JSON.stringify(v))}catch(e){}}};
 let framed=true;try{framed=window.top!==window.self}catch(e){framed=true}
 const inArtifact=!!(window.claude&&window.claude.use)&&location.protocol!=="file:"&&framed;
-const APPVER="Version 6 · 25.11.2026";
+const APPVER="Version 7 · 26.11.2026";
 
 /* ================= Speicher (IndexedDB, sonst Arbeitsspeicher) ================= */
 const DB={db:null,mem:null,
@@ -547,7 +563,7 @@ document.addEventListener("visibilitychange",async()=>{if(!R.on)return;
   if(document.visibilityState==="hidden"){R.hiddenAt=Date.now()}
   else{if(R.hiddenAt){const gap=[R.hiddenAt,Date.now()];if(gap[1]-gap[0]>5000){R.session.gaps.push(gap);DB.put("sessions",R.session);toast("Unterbruch von "+fmtDur((gap[1]-gap[0])/1000)+" (App war im Hintergrund)")}R.hiddenAt=null}
     try{if(R.ctx.state!=="running")await R.ctx.resume()}catch(e){}requestWake()}});
-function setRecUI(){const b=$("#recBtn");b.textContent=R.on?"Aufnahme stoppen":"Aufnahme starten";b.classList.toggle("stop",R.on);b.classList.toggle("primary",!R.on);
+function setRecUI(){const b=$("#recBtn"),lt=R.on?"Aufnahme stoppen":"Aufnahme starten";$("#recLbl").textContent=lt;b.setAttribute("aria-label",lt);b.classList.toggle("rec",R.on);
   const st=$("#status");st.textContent=R.on?"nimmt auf":"bereit";st.classList.toggle("rec",R.on);$("#nightBtn").disabled=!R.on}
 function showEnv(msg,err){const n=$("#envNote");n.textContent=msg;n.classList.toggle("err",!!err);n.hidden=false}
 
@@ -686,10 +702,28 @@ function renderAnalysis(){const key=$("#nightSel2").value||"all";const [t0,t1]=s
     return "<tr><td class='mono'>"+esc(fmtDate(n.t)+" "+fmtHM(n.t))+"</td><td>"+esc(n.text||"")+"</td><td class='num'>"+(n.rh!=null?esc(n.rh)+" %":"–")+"</td><td class='num'>"+(n.tin!=null?esc(n.tin)+"°":"–")+"</td><td class='num'>"+b+"</td><td class='num'>"+a+"</td></tr>"}).join("")}}
 
 /* ================= Archiv-Liste ================= */
-const urls=new Map();let playing=null;
-async function playEvent(e,btn){if(playing){playing.pause();playing=null}
-  let src;if(e.demo){src=URL.createObjectURL(typeOf(e)==="knall"?synthCrack(e):synthSustain(e))}else{let c=await DB.get("clips",e.id);if(!c&&Cloud.user){toast("Lade Ton aus der Online-Datenbank …");const b=await Cloud.clip(e.id);if(b)c={blob:b}}if(!c){toast("Kein Tonausschnitt gespeichert");return}src=URL.createObjectURL(c.blob)}
-  const a=new Audio(src);playing=a;btn.classList.add("on");a.onended=()=>{btn.classList.remove("on");URL.revokeObjectURL(src)};a.play().catch(()=>toast("Wiedergabe nicht möglich"))}
+let playing=null;
+const isIOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+let SILENT=null;
+function wavBoost(ab,trigOff){try{const dv=new DataView(ab);if(dv.getUint32(0,false)!==0x52494646||dv.getUint16(20,true)!==1||dv.getUint16(22,true)!==1||dv.getUint16(34,true)!==16)return null;
+  const rate=dv.getUint32(24,true),n=(ab.byteLength-44)>>1;let pk=1;for(let i=0;i<n;i++){const v=Math.abs(dv.getInt16(44+i*2,true));if(v>pk)pk=v}
+  const g=Math.min(40,29000/pk),st=Math.max(0,Math.round(((trigOff||1)-0.3)*rate)),m=n-st;if(m<=0)return null;const x=new Float32Array(m);
+  for(let i=0;i<m;i++)x[i]=dv.getInt16(44+(st+i)*2,true)/32768*g;return {blob:encodeWav(x,rate),gain:g}}catch(e){return null}}
+function stopPlay(){if(!playing)return;playing.btn.style.removeProperty("--p");try{playing.a.pause()}catch(e){}playing.btn.classList.remove("on");playing.btn.innerHTML=PLAYICON;if(playing.url)URL.revokeObjectURL(playing.url);playing=null}
+const PLAYICON="<svg viewBox='0 0 16 16'><path d='M4 2l10 6-10 6z'/></svg>",STOPICON="<svg viewBox='0 0 16 16'><rect x='3' y='3' width='10' height='10' rx='1'/></svg>";
+function playEvent(e,btn){const same=playing&&playing.btn===btn;stopPlay();if(same)return;
+  // Audio-Element sofort im Klick freischalten (iPhone verlangt das), danach den echten Ton laden
+  const a=new Audio();a.playsInline=true;a.preload="auto";if(!SILENT)SILENT=URL.createObjectURL(encodeWav(new Float32Array(400),8000));a.src=SILENT;const unlock=a.play();if(unlock&&unlock.catch)unlock.catch(()=>{});
+  const me={a,btn,url:null};playing=me;try{navigator.vibrate&&navigator.vibrate(10)}catch(e){}btn.classList.add("on");btn.innerHTML=STOPICON;
+  (async()=>{try{let blob,trig=1;
+      if(e.demo){blob=typeOf(e)==="knall"?synthCrack(e):synthSustain(e)}
+      else{let c=await DB.get("clips",e.id);if(!c&&Cloud.user){toast("Lade Ton aus der Online-Datenbank …");const b=await Cloud.clip(e.id);if(b)c={blob:b,trigOff:1}}
+        if(!c){toast(e.noClip?"Für dieses Geräusch wurde kein Ton gespeichert (Speicher sparen).":"Kein Tonausschnitt gespeichert");stopPlay();return}blob=c.blob||new Blob([c.buf],{type:"audio/wav"});trig=c.trigOff??1}
+      const bo=wavBoost(await blob.arrayBuffer(),trig);if(bo)blob=bo.blob;if(playing!==me)return;
+      me.url=URL.createObjectURL(blob);a.onended=()=>{if(playing===me)stopPlay()};a.onerror=()=>{toast("Ton konnte nicht abgespielt werden");if(playing===me)stopPlay()};a.src=me.url;await a.play();const tick=()=>{if(playing!==me)return;const d=a.duration||1;btn.style.setProperty("--p",Math.min(1,a.currentTime/d).toFixed(3));requestAnimationFrame(tick)};tick();
+      if(R.on&&isIOS)toast("Während der Aufnahme spielt das iPhone nur leise über die Hörmuschel. Für lauten Ton die Aufnahme kurz stoppen.");
+      else if(bo&&bo.gain>4)toast("Leises Geräusch, "+Math.round(20*Math.log10(bo.gain))+" dB lauter abgespielt")}
+    catch(err){toast("Wiedergabe nicht möglich ("+((err&&err.name)||err)+"). "+(isIOS?"Ist der Ton am iPhone laut gestellt?":""));if(playing===me)stopPlay()}})()}
 let evType=store.get("evType","alle");
 function renderTypeFilter(base){const box=$("#typeFilter");box.innerHTML="";const counts={};base.forEach(e=>{const t=typeOf(e);counts[t]=(counts[t]||0)+1});
   [["alle","Alle",null,base.length],...Object.entries(TYPES).map(([k,v])=>[k,v.label,v.c,counts[k]||0])].forEach(([k,l,c,n])=>{if(k!=="alle"&&!n&&evType!==k)return;const b=document.createElement("button");b.setAttribute("aria-pressed",evType===k);
